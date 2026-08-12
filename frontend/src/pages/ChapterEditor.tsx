@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import {
   Alert,
   Button,
@@ -17,15 +17,23 @@ import {
 } from "antd";
 import {
   ArrowLeftOutlined,
+  ArrowRightOutlined,
   DeleteOutlined,
   SaveOutlined,
 } from "@ant-design/icons";
 import { useNavigate, useParams } from "react-router-dom";
-import { useChapter, useUpdateChapter, useDeleteChapter } from "@/api/chapters";
+import {
+  useChapter,
+  useChapters,
+  useUpdateChapter,
+  useDeleteChapter,
+} from "@/api/chapters";
+import { useVolumes } from "@/api/volumes";
 import {
   CHAPTER_STATUS_COLOR,
   CHAPTER_STATUS_LABEL,
   CHAPTER_TYPE_LABEL,
+  type Chapter,
   type ChapterStatus,
   type ChapterTypeKind,
 } from "@/types/chapter";
@@ -69,6 +77,8 @@ export function ChapterEditor() {
   const [form] = Form.useForm<FormValues>();
 
   const { data: chapter, isLoading, isError, error, refetch } = useChapter(workId, chapterId);
+  const { data: allChapters = [] } = useChapters(workId);
+  const { data: allVolumes = [] } = useVolumes(workId);
   const { mutate: update, isPending } = useUpdateChapter(workId);
   const { mutate: remove } = useDeleteChapter(workId);
   const { data: foreshadows = [] } = useForeshadows(workId);
@@ -90,6 +100,28 @@ export function ChapterEditor() {
       });
     }
   }, [chapter, form]);
+
+  // Flat ordered list of all chapters in the work (volume order, then free
+  // chapters last). Used to compute prev/next navigation.
+  const flatChapters = useMemo(() => {
+    const byVolume = new Map<number | null, Chapter[]>();
+    for (const c of allChapters) {
+      const k = c.volume_id ?? null;
+      if (!byVolume.has(k)) byVolume.set(k, []);
+      byVolume.get(k)!.push(c);
+    }
+    for (const arr of byVolume.values()) {
+      arr.sort((a, b) => a.order_num - b.order_num);
+    }
+    const groupOrder: (number | null)[] = [
+      ...allVolumes
+        .slice()
+        .sort((a, b) => a.order_num - b.order_num)
+        .map((v) => v.id),
+    ];
+    if (byVolume.has(null)) groupOrder.push(null);
+    return groupOrder.flatMap((k) => byVolume.get(k) ?? []);
+  }, [allChapters, allVolumes]);
 
   if (isLoading) return <Typography.Text type="secondary">加载中…</Typography.Text>;
   if (isError) {
@@ -159,9 +191,17 @@ export function ChapterEditor() {
     (f) => f.chapter_id === chapterId || f.planted_chapter_id === chapterId
   );
 
+  // Derived from flatChapters (already memoized above the early returns).
+  const currentIndex = flatChapters.findIndex((c) => c.id === chapterId);
+  const prevChapter = currentIndex > 0 ? flatChapters[currentIndex - 1] : null;
+  const nextChapter =
+    currentIndex >= 0 && currentIndex < flatChapters.length - 1
+      ? flatChapters[currentIndex + 1]
+      : null;
+
   return (
     <div>
-      <Space style={{ marginBottom: 16 }}>
+      <Space style={{ marginBottom: 16 }} wrap>
         <Button icon={<ArrowLeftOutlined />} onClick={() => navigate(`/works/${workId}/outline`)}>
           返回大纲
         </Button>
@@ -171,6 +211,29 @@ export function ChapterEditor() {
         <Tag color={CHAPTER_STATUS_COLOR[chapter.status]}>
           {CHAPTER_STATUS_LABEL[chapter.status]}
         </Tag>
+        <span style={{ flex: 1 }} />
+        <Button
+          icon={<ArrowLeftOutlined />}
+          disabled={!prevChapter}
+          onClick={() =>
+            prevChapter &&
+            navigate(`/works/${workId}/chapters/${prevChapter.id}`)
+          }
+          title={prevChapter?.title}
+        >
+          上一章
+        </Button>
+        <Button
+          icon={<ArrowRightOutlined />}
+          disabled={!nextChapter}
+          onClick={() =>
+            nextChapter &&
+            navigate(`/works/${workId}/chapters/${nextChapter.id}`)
+          }
+          title={nextChapter?.title}
+        >
+          下一章
+        </Button>
       </Space>
 
       <Row gutter={16}>

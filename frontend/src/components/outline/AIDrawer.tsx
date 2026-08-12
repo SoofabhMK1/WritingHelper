@@ -14,6 +14,7 @@ import {
 } from "antd";
 import {
   CheckCircleOutlined,
+  CheckOutlined,
   CloseCircleOutlined,
   ExperimentOutlined,
   ReloadOutlined,
@@ -34,7 +35,9 @@ import {
   useSuggestOutline,
   type OutlineVolume,
 } from "@/api/ai";
-import type { Chapter, Volume } from "@/types";
+import { useCreateVolume, useVolumes } from "@/api/volumes";
+import { useCreateChapter, useChapters } from "@/api/chapters";
+import type { Chapter, ChapterTypeKind, Volume } from "@/types";
 
 export type AIDrawerTarget =
   | { kind: "volume"; workId: number; volume: Volume }
@@ -107,17 +110,104 @@ export function AIDrawer({
         />
       )}
 
-      {target.kind === "volume" && <VolumePanel workId={target.workId} />}
+      {target.kind === "volume" && (
+        <VolumePanel workId={target.workId} volumeId={target.volume.id} />
+      )}
       {target.kind === "chapter" && <ChapterPanel workId={target.workId} chapter={target.chapter} />}
     </div>
   );
 }
 
-function VolumePanel({ workId }: { workId: number }) {
+function VolumePanel({
+  workId,
+  volumeId,
+}: {
+  workId: number;
+  volumeId: number;
+}) {
   const [volumes, setVolumes] = useState<OutlineVolume[] | null>(null);
+  const [acceptedVolumes, setAcceptedVolumes] = useState<Set<number>>(new Set());
   const [chapters, setChapters] = useState<ChapterItem[] | null>(null);
+  const [acceptedChapters, setAcceptedChapters] = useState<Set<number>>(new Set());
   const { mutate: genOutline, isPending: loadingOutline } = useSuggestOutline(workId);
   const { mutate: genChapters, isPending: loadingChapters } = useSuggestChapters(workId);
+  const { mutate: createVolume, isPending: creatingVolume } = useCreateVolume(workId);
+  const { mutate: createChapter, isPending: creatingChapter } = useCreateChapter(workId);
+  const { data: existingVolumes = [] } = useVolumes(workId);
+  const { data: existingChapters = [] } = useChapters(workId, volumeId);
+
+  function acceptVolume(i: number, v: OutlineVolume) {
+    const orderNum = existingVolumes.length + acceptedVolumes.size;
+    createVolume(
+      {
+        title: v.title,
+        summary: v.summary ?? null,
+        target_words: v.target_words ?? 0,
+        status: "planning",
+        order_num: orderNum,
+      },
+      {
+        onSuccess: () => {
+          setAcceptedVolumes((prev) => new Set(prev).add(i));
+          message.success(`已采纳《${v.title}》`);
+        },
+        onError: (e: Error) => message.error(`采纳失败:${e.message}`),
+      },
+    );
+  }
+
+  function acceptAllVolumes() {
+    if (!volumes) return;
+    const pending = volumes
+      .map((v, i) => ({ v, i }))
+      .filter(({ i }) => !acceptedVolumes.has(i));
+    if (pending.length === 0) return;
+    pending.forEach(({ v, i }) => acceptVolume(i, v));
+  }
+
+  function acceptChapter(i: number, c: ChapterItem, baseOrder: number) {
+    const validTypes: ChapterTypeKind[] = [
+      "opening",
+      "plot",
+      "transitional",
+      "climax",
+      "resolution",
+      "epilogue",
+      "interlude",
+    ];
+    const chapterType: ChapterTypeKind = validTypes.includes(
+      c.chapter_type as ChapterTypeKind,
+    )
+      ? (c.chapter_type as ChapterTypeKind)
+      : "plot";
+    createChapter(
+      {
+        work_id: workId,
+        volume_id: volumeId,
+        title: c.title,
+        summary: c.summary ?? null,
+        chapter_type: chapterType,
+        order_num: baseOrder + i,
+      },
+      {
+        onSuccess: () => {
+          setAcceptedChapters((prev) => new Set(prev).add(i));
+          message.success(`已采纳章节《${c.title}》`);
+        },
+        onError: (e: Error) => message.error(`采纳失败:${e.message}`),
+      },
+    );
+  }
+
+  function acceptAllChapters() {
+    if (!chapters) return;
+    const pending = chapters
+      .map((c, i) => ({ c, i }))
+      .filter(({ i }) => !acceptedChapters.has(i));
+    if (pending.length === 0) return;
+    const baseOrder = existingChapters.length;
+    pending.forEach(({ c, i }) => acceptChapter(i, c, baseOrder));
+  }
 
   return (
     <Space direction="vertical" style={{ width: "100%" }} size="middle">
@@ -133,15 +223,19 @@ function VolumePanel({ workId }: { workId: number }) {
         <Form
           layout="vertical"
           initialValues={{ volume_count: 3 }}
-          onFinish={(v) =>
+          onFinish={(v) => {
+            setAcceptedVolumes(new Set());
             genOutline(
-              { volume_count: Number(v.volume_count), target_words: Number(v.target_words) || undefined },
+              {
+                volume_count: Number(v.volume_count),
+                target_words: Number(v.target_words) || undefined,
+              },
               {
                 onSuccess: (d) => setVolumes(d.volumes),
                 onError: (e: Error) => message.error(e.message),
-              }
-            )
-          }
+              },
+            );
+          }}
         >
           <Form.Item name="volume_count" label="卷数" rules={[{ required: true }]}>
             <InputNumber min={1} max={10} style={{ width: 120 }} />
@@ -156,25 +250,79 @@ function VolumePanel({ workId }: { workId: number }) {
 
         {volumes && (
           <div style={{ marginTop: 12 }}>
-            <Typography.Text type="secondary">
-              {volumes.length} 个建议(不会自动写入数据库,请手动采纳)
-            </Typography.Text>
-            {volumes.map((v, i) => (
-              <Card size="small" key={i} style={{ marginTop: 8 }}>
-                <strong>{v.title}</strong>
-                <Tag style={{ marginLeft: 8 }}>{v.target_words?.toLocaleString() ?? "—"} 字</Tag>
-                <Typography.Paragraph
-                  type="secondary"
-                  style={{ marginTop: 6, marginBottom: 0, fontSize: 12 }}
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                marginBottom: 8,
+              }}
+            >
+              <Typography.Text type="secondary">
+                {volumes.length} 个建议 · 已采纳 {acceptedVolumes.size} 个
+              </Typography.Text>
+              <Button
+                size="small"
+                type="primary"
+                ghost
+                onClick={acceptAllVolumes}
+                disabled={
+                  acceptedVolumes.size === volumes.length || creatingVolume
+                }
+              >
+                全部采纳
+              </Button>
+            </div>
+            {volumes.map((v, i) => {
+              const accepted = acceptedVolumes.has(i);
+              return (
+                <Card
+                  size="small"
+                  key={i}
+                  style={{ marginTop: 8, background: accepted ? "#f6ffed" : undefined }}
                 >
-                  {v.summary}
-                </Typography.Paragraph>
-              </Card>
-            ))}
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "flex-start",
+                      gap: 8,
+                    }}
+                  >
+                    <div style={{ flex: 1 }}>
+                      <strong>{v.title}</strong>
+                      <Tag style={{ marginLeft: 8 }}>
+                        {v.target_words?.toLocaleString() ?? "—"} 字
+                      </Tag>
+                      <Typography.Paragraph
+                        type="secondary"
+                        style={{ marginTop: 6, marginBottom: 0, fontSize: 12 }}
+                      >
+                        {v.summary}
+                      </Typography.Paragraph>
+                    </div>
+                    <Button
+                      size="small"
+                      type={accepted ? "default" : "primary"}
+                      ghost={!accepted}
+                      icon={accepted ? <CheckOutlined /> : undefined}
+                      disabled={accepted}
+                      loading={creatingVolume && !accepted}
+                      onClick={() => acceptVolume(i, v)}
+                    >
+                      {accepted ? "已采纳" : "采纳"}
+                    </Button>
+                  </div>
+                </Card>
+              );
+            })}
             <Button
               size="small"
               style={{ marginTop: 8 }}
-              onClick={() => setVolumes(null)}
+              onClick={() => {
+                setVolumes(null);
+                setAcceptedVolumes(new Set());
+              }}
               icon={<ReloadOutlined />}
             >
               重新生成
@@ -195,26 +343,32 @@ function VolumePanel({ workId }: { workId: number }) {
         <Form
           layout="vertical"
           initialValues={{ target_chapter_count: 10 }}
-          onFinish={(v) =>
+          onFinish={(v) => {
+            setAcceptedChapters(new Set());
             genChapters(
               {
-                volume_id: Number(v.volume_id),
+                volume_id: volumeId,
                 target_chapter_count: Number(v.target_chapter_count),
               },
               {
                 onSuccess: (d) => setChapters(d.chapters),
                 onError: (e: Error) => message.error(e.message),
-              }
-            )
-          }
+              },
+            );
+          }}
         >
           <Form.Item
             name="volume_id"
-            label="归属卷 ID"
-            tooltip="打开大纲页查看卷 ID(在浏览器地址栏)"
+            label="归属卷"
+            tooltip={
+              <span>
+                已自动填入当前卷(#{volumeId})。如需为其他卷生成章节,请在大纲页切换。
+              </span>
+            }
+            initialValue={volumeId}
             rules={[{ required: true, type: "number" }]}
           >
-            <InputNumber min={1} style={{ width: 200 }} />
+            <InputNumber min={1} disabled style={{ width: 200 }} />
           </Form.Item>
           <Form.Item name="target_chapter_count" label="章节数" rules={[{ required: true }]}>
             <InputNumber min={1} max={100} style={{ width: 120 }} />
@@ -225,23 +379,74 @@ function VolumePanel({ workId }: { workId: number }) {
         </Form>
         {chapters && (
           <div style={{ marginTop: 12 }}>
-            <Typography.Text type="secondary">{chapters.length} 个建议</Typography.Text>
-            {chapters.map((c, i) => (
-              <Card size="small" key={i} style={{ marginTop: 8 }}>
-                <strong>{c.title}</strong>
-                {c.chapter_type && (
-                  <Tag color="blue" style={{ marginLeft: 8 }}>
-                    {c.chapter_type}
-                  </Tag>
-                )}
-                <Typography.Paragraph
-                  type="secondary"
-                  style={{ marginTop: 6, marginBottom: 0, fontSize: 12 }}
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                marginBottom: 8,
+              }}
+            >
+              <Typography.Text type="secondary">
+                {chapters.length} 个建议 · 已采纳 {acceptedChapters.size} 个
+              </Typography.Text>
+              <Button
+                size="small"
+                type="primary"
+                ghost
+                onClick={acceptAllChapters}
+                disabled={
+                  acceptedChapters.size === chapters.length || creatingChapter
+                }
+              >
+                全部采纳
+              </Button>
+            </div>
+            {chapters.map((c, i) => {
+              const accepted = acceptedChapters.has(i);
+              return (
+                <Card
+                  size="small"
+                  key={i}
+                  style={{ marginTop: 8, background: accepted ? "#f6ffed" : undefined }}
                 >
-                  {c.summary}
-                </Typography.Paragraph>
-              </Card>
-            ))}
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "flex-start",
+                      gap: 8,
+                    }}
+                  >
+                    <div style={{ flex: 1 }}>
+                      <strong>{c.title}</strong>
+                      {c.chapter_type && (
+                        <Tag color="blue" style={{ marginLeft: 8 }}>
+                          {c.chapter_type}
+                        </Tag>
+                      )}
+                      <Typography.Paragraph
+                        type="secondary"
+                        style={{ marginTop: 6, marginBottom: 0, fontSize: 12 }}
+                      >
+                        {c.summary}
+                      </Typography.Paragraph>
+                    </div>
+                    <Button
+                      size="small"
+                      type={accepted ? "default" : "primary"}
+                      ghost={!accepted}
+                      icon={accepted ? <CheckOutlined /> : undefined}
+                      disabled={accepted}
+                      loading={creatingChapter && !accepted}
+                      onClick={() => acceptChapter(i, c, 0)}
+                    >
+                      {accepted ? "已采纳" : "采纳"}
+                    </Button>
+                  </div>
+                </Card>
+              );
+            })}
           </div>
         )}
       </Card>

@@ -12,6 +12,7 @@ import {
 import { useNavigate, useParams } from "react-router-dom";
 import { useWork } from "@/api/works";
 import { useAIStatus } from "@/api/settings";
+import { useChapters } from "@/api/chapters";
 import { STATUS_COLOR, STATUS_LABEL } from "@/types/work";
 
 export function WorkOverview() {
@@ -20,6 +21,18 @@ export function WorkOverview() {
   const navigate = useNavigate();
   const { data: work, isLoading, isError, error, refetch } = useWork(id);
   const { data: aiStatus } = useAIStatus();
+  const { data: chapters = [] } = useChapters(id);
+
+  function openMostRecentChapter() {
+    if (chapters.length === 0) {
+      navigate(`/works/${id}/outline`);
+      return;
+    }
+    const sorted = [...chapters].sort(
+      (a, b) => +new Date(b.updated_at) - +new Date(a.updated_at),
+    );
+    navigate(`/works/${id}/chapters/${sorted[0].id}`);
+  }
 
   if (isLoading) return <Typography.Text type="secondary">加载中…</Typography.Text>;
   if (isError) {
@@ -124,11 +137,15 @@ export function WorkOverview() {
             </Card>
           </Col>
           <Col span={6}>
-            <Card hoverable onClick={() => navigate(`/works/${work.id}/outline`)}>
+            <Card hoverable onClick={openMostRecentChapter}>
               <Space direction="vertical">
                 <FileTextOutlined style={{ fontSize: 24 }} />
                 <strong>章节写作</strong>
-                <Typography.Text type="secondary">P6 接入富文本</Typography.Text>
+                <Typography.Text type="secondary">
+                  {chapters.length === 0
+                    ? "尚无章节,先去大纲新建"
+                    : "打开最近编辑的章节"}
+                </Typography.Text>
               </Space>
             </Card>
           </Col>
