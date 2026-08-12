@@ -4,6 +4,7 @@ from app.api.v1 import (
     ai,
     ai_logs,
     ai_profiles,
+    ai_prompt_templates,
     backup,
     chapters,
     characters,
@@ -30,6 +31,7 @@ api_router.include_router(foreshadowing.router)
 api_router.include_router(settings.router)
 api_router.include_router(ai.router)
 api_router.include_router(ai_profiles.router)
+api_router.include_router(ai_prompt_templates.router)
 api_router.include_router(ai_logs.router)
 api_router.include_router(backup.router)
 api_router.include_router(prompt_fragments.router)

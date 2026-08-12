@@ -46,6 +46,7 @@ def record(
     model: Optional[str] = None,
     profile_id: Optional[int] = None,
     provider: Optional[str] = None,
+    prompt_assembly_id: Optional[int] = None,
 ) -> LlmRequestLog:
     """Insert a new log row, then trim the oldest if over ``MAX_LOGS``."""
     row = LlmRequestLog(
@@ -61,6 +62,7 @@ def record(
         model=model,
         profile_id=profile_id,
         provider=provider,
+        prompt_assembly_id=prompt_assembly_id,
     )
     db.add(row)
     db.flush()  # populate row.id + created_at
@@ -97,6 +99,7 @@ def to_summary(row: LlmRequestLog) -> dict:
         "model": row.model,
         "provider": row.provider,
         "profile_id": row.profile_id,
+        "prompt_assembly_id": row.prompt_assembly_id,
         "user_preview": _preview(row.user),
         "response_preview": _preview(row.response),
         "error": row.error,

@@ -63,7 +63,7 @@ export function MainLayout() {
           onClick={({ key }) => navigate(key as string)}
           items={[
             { key: "/", icon: <HomeOutlined />, label: "作品库" },
-            { key: "/prompts", icon: <ExperimentOutlined />, label: "提示词模板" },
+            { key: "/prompts", icon: <ExperimentOutlined />, label: "提示词管理" },
             { key: "/ai-logs", icon: <FileSearchOutlined />, label: "请求日志" },
             { key: "/settings", icon: <SettingOutlined />, label: "设置" },
           ]}

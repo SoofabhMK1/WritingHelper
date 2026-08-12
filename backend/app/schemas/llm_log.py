@@ -28,6 +28,7 @@ class LlmRequestLogSummary(BaseModel):
     model: Optional[str] = None
     provider: Optional[str] = None
     profile_id: Optional[int] = None
+    prompt_assembly_id: Optional[int] = None
     user_preview: str = ""
     response_preview: str = ""
     error: Optional[str] = None
@@ -55,6 +56,7 @@ class LlmRequestLogDetail(BaseModel):
     model: Optional[str] = None
     provider: Optional[str] = None
     profile_id: Optional[int] = None
+    prompt_assembly_id: Optional[int] = None
     created_at: datetime
     updated_at: datetime
 

@@ -7,6 +7,12 @@ an explicit prompt → profile assignment wins; otherwise the call uses
 the default saved profile. If no profile is configured, the call falls
 back to environment variables and finally returns 503.
 
+The actual ``(system, user)`` body is rendered by
+``app.services.ai_prompt_template.resolve_prompt``, which honours the
+per-prompt template binding (a saved ``PromptAssembly``). When no
+binding is set, the call falls back to the built-in template in
+``app.ai.prompts.PROMPTS``.
+
 Every successful or failed LLM call is captured by the audit log via
 ``app.services.llm_log.record()`` — see ``_call`` / ``free_chat``.
 """
@@ -23,18 +29,17 @@ from sqlalchemy.orm import Session
 from app.ai import client as ai_client
 from app.ai import context as ctx
 from app.ai import prompts as ai_prompts
-from app.ai.prompts import (
-    PROMPTS,
-    render,
-)
+from app.ai.prompts import PROMPTS
 from app.database import get_db
 from app.services import llm_log
+from app.services.ai_prompt_template import resolve_prompt
 from app.services.ai_profiles import (
     get_default_profile,
     list_assignments,
     list_profiles,
     profile_to_summary,
 )
+from app.services.prompt_assembly import AssemblyRenderError
 
 router = APIRouter(prefix="/ai", tags=["ai"])
 
@@ -137,7 +142,13 @@ def _call(
     prompt = PROMPTS.get(prompt_name)
     if prompt is None:
         raise HTTPException(status_code=400, detail=f"Unknown prompt: {prompt_name}")
-    system, user = render(prompt, variables)
+    try:
+        resolved = resolve_prompt(db, prompt_name, variables)
+    except AssemblyRenderError as e:
+        raise HTTPException(
+            status_code=422, detail={"code": e.code, "message": e.message}
+        ) from e
+    system, user = resolved.system, resolved.user
     cfg = ai_client.resolve_config(db, prompt_name=prompt_name)
     started = time.monotonic()
     try:
@@ -165,6 +176,7 @@ def _call(
             profile_id=cfg.profile_id,
             provider=cfg.provider,
             model=cfg.model,
+            prompt_assembly_id=resolved.assembly_id,
         )
         code = 503 if e.code == "not_configured" else 502
         raise HTTPException(status_code=code, detail=str(e)) from e
@@ -182,6 +194,7 @@ def _call(
         profile_id=cfg.profile_id,
         provider=cfg.provider,
         model=cfg.model,
+        prompt_assembly_id=resolved.assembly_id,
     )
     if json_mode:
         return _parse_json(text)
@@ -307,10 +320,17 @@ def free_chat(payload: ChatRequest, db: Session = Depends(get_db)):
         context_text = ctx.full_context(db, payload.work_id)
     else:
         context_text = "(未载入作品上下文)"
-    system, user = render(
-        PROMPTS["chat"],
-        {"context": context_text, "question": payload.question},
-    )
+    try:
+        resolved = resolve_prompt(
+            db,
+            "chat",
+            {"context": context_text, "question": payload.question},
+        )
+    except AssemblyRenderError as e:
+        raise HTTPException(
+            status_code=422, detail={"code": e.code, "message": e.message}
+        ) from e
+    system, user = resolved.system, resolved.user
     cfg = ai_client.resolve_config(db, prompt_name="chat")
     started = time.monotonic()
     try:
@@ -338,6 +358,7 @@ def free_chat(payload: ChatRequest, db: Session = Depends(get_db)):
             profile_id=cfg.profile_id,
             provider=cfg.provider,
             model=cfg.model,
+            prompt_assembly_id=resolved.assembly_id,
         )
         code = 503 if e.code == "not_configured" else 502
         raise HTTPException(status_code=code, detail=str(e)) from e
@@ -355,6 +376,7 @@ def free_chat(payload: ChatRequest, db: Session = Depends(get_db)):
         profile_id=cfg.profile_id,
         provider=cfg.provider,
         model=cfg.model,
+        prompt_assembly_id=resolved.assembly_id,
     )
     return {"answer": text}
 

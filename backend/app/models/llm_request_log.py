@@ -38,3 +38,7 @@ class LlmRequestLog(Base, TimestampMixin):
         nullable=True,
     )
     provider: Mapped[Optional[str]] = mapped_column(String(40), nullable=True)
+    prompt_assembly_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("prompt_assemblies.id", ondelete="SET NULL"),
+        nullable=True,
+    )

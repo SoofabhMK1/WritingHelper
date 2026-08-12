@@ -8,6 +8,9 @@ export interface LlmRequestLogSummary {
   status: LlmLogStatus;
   duration_ms: number;
   model: string | null;
+  provider: string | null;
+  profile_id: number | null;
+  prompt_assembly_id: number | null;
   user_preview: string;
   response_preview: string;
   error: string | null;

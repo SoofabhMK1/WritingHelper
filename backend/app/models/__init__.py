@@ -14,6 +14,7 @@ from app.models.event import (
 )
 from app.models.state import CharacterState, StateType
 from app.models.ai_prompt_assignment import AIPromptAssignment
+from app.models.ai_prompt_template_binding import AIPromptTemplateBinding
 from app.models.ai_service_profile import AIServiceProfile
 from app.models.app_setting import AppSetting
 from app.models.foreshadowing import Foreshadowing, ForeshadowStatus
@@ -49,4 +50,5 @@ __all__ = [
     "PromptAssembly",
     "AIServiceProfile",
     "AIPromptAssignment",
+    "AIPromptTemplateBinding",
 ]

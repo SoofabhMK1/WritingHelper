@@ -1,4 +1,4 @@
-import type { ComponentType } from "react";
+import type { ComponentType, CSSProperties } from "react";
 import {
   AlertOutlined,
   CheckCircleOutlined,
@@ -42,7 +42,7 @@ export const PROMPT_DESCRIPTIONS: Record<PromptName, string> = {
   chat: "基于已载入的作品上下文进行自由提问",
 };
 
-export const PROMPT_ICONS: Record<PromptName, ComponentType> = {
+export const PROMPT_ICONS: Record<PromptName, ComponentType<{ style?: CSSProperties }>> = {
   outline: PartitionOutlined,
   chapters: FileTextOutlined,
   character: UserOutlined,

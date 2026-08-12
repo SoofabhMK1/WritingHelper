@@ -13,8 +13,7 @@ import { EventEditor } from "@/pages/EventEditor";
 import { StateTracker } from "@/pages/StateTracker";
 import { Settings } from "@/pages/Settings";
 import { AISettings } from "@/pages/AISettings";
-import { Prompts } from "@/pages/Prompts";
-import { PromptDetail } from "@/pages/PromptDetail";
+import { PromptManagement } from "@/pages/PromptManagement";
 import { PromptAssemblyEditorPage } from "@/pages/PromptAssemblyEditorPage";
 import { AILogs } from "@/pages/AILogs";
 import { AILogDetail } from "@/pages/AILogDetail";
@@ -53,7 +52,7 @@ export const router = createBrowserRouter([
       { index: true, element: <Home /> },
       { path: "settings", element: <Settings /> },
       { path: "settings/ai", element: <AISettings /> },
-      { path: "prompts", element: <Prompts /> },
+      { path: "prompts", element: <PromptManagement /> },
       {
         path: "prompts/fragments",
         element: <Navigate to="/prompts?tab=fragments" replace />,
@@ -63,7 +62,10 @@ export const router = createBrowserRouter([
         element: <Navigate to="/prompts?tab=assemblies" replace />,
       },
       { path: "prompts/assemblies/:id", element: <PromptAssemblyEditorPage /> },
-      { path: "prompts/:name", element: <PromptDetail /> },
+      {
+        path: "prompts/:name",
+        element: <Navigate to="/prompts?tab=bindings" replace />,
+      },
       { path: "ai-logs", element: <AILogs /> },
       { path: "ai-logs/:id", element: <AILogDetail /> },
       { path: "works/new", element: <WorkForm /> },

@@ -189,16 +189,39 @@ otherwise every query fails with `no such table: <name>`.
   `api/aiProfile.ts` and all of them invalidate `["settings", "ai-status"]`
   so the global status card on `pages/Settings.tsx` and the `AIDrawer`
   banner refresh in step.
-- **Prompt templates** at `/prompts/*` is a global read-only reference
-  for the AI prompts registered in `backend/app/ai/prompts.py`.
-  `pages/Prompts.tsx` lists prompts from `GET /api/v1/ai/prompts`;
-  `pages/PromptDetail.tsx` shows the full system + user template from
-  `GET /api/v1/ai/prompts/{name}`. Display labels / descriptions /
-  icons live in `types/prompt.ts` keyed by backend prompt name — they
-  only affect rendering. The page is read-only; the editor is post-P7.
-  Adding a prompt on the backend (new `Prompt` instance in
-  `PROMPTS`) requires a matching label / description / icon entry in
-  `types/prompt.ts` so the UI can render it.
+- **Prompt management** at `/prompts/*` is the central console for
+  deciding which template each AI function (卷大纲 / 章节细化 / 人物
+  生成 / 事件建议 / 一致性 / 续写 / 扩写 / 自由对话) actually uses.
+  `pages/PromptManagement.tsx` is a single page with three tabs:
+  - **AI 功能模板** (default): a table of the eight AI functions. Each
+    row shows the current template (`系统默认` or a custom assembly
+    name), a `Select` to switch the binding, and two action buttons —
+    查看 (opens a Modal showing the built-in template body, or jumps to
+    the existing custom template editor) and **复制为自定义模板**
+    (creates a new `PromptAssembly` seeded from the built-in body and
+    immediately binds it).
+  - **提示词片段**: the global fragment library (unchanged from before).
+  - **自定义模板**: the global assembly library (unchanged from before).
+  The sidebar label is **提示词管理**. The legacy `/prompts/:name` URL
+  redirects to `/prompts?tab=bindings`.
+  Backend: `app/models/ai_prompt_template_binding.py` (`prompt_name` PK
+  → `prompt_assemblies.id` with `ON DELETE SET NULL`). The service
+  layer (`app/services/ai_prompt_template.py`) exposes
+  `list_bindings`, `set_binding`, `clear_binding`,
+  `clone_builtin_to_assembly`, and the single chokepoint
+  `resolve_prompt(db, prompt_name, variables) -> ResolvedPrompt`
+  used by `app/api/v1/ai.py::_call` and `free_chat`. When a binding
+  is set, the call renders via `prompt_assembly.render_assembly`;
+  when null, it falls back to `app.ai.prompts.PROMPTS`. Deleting a
+  bound assembly cascades to NULL and the call reverts to the
+  built-in automatically. `llm_request_logs.prompt_assembly_id`
+  (also `ON DELETE SET NULL`) records which template produced each
+  row. The read-only catalog lives at
+  `GET /api/v1/ai/prompts-catalog` (and `…/{name}`) so the UI
+  doesn't depend on the legacy `/ai/prompts/{name}` route shape.
+  Adding a new prompt on the backend (a new `Prompt` instance in
+  `PROMPTS`) still requires a matching label / description / icon
+  entry in `types/prompt.ts` so the management table renders it.
 - **LLM request log** at `/ai-logs/*` is the global audit log of every
   outgoing LLM call (full system / user / response + status + duration).
   Captured by `app/services/llm_log.record()` from inside
@@ -209,7 +232,7 @@ otherwise every query fails with `no such table: <name>`.
   and supports filters by work / prompt / status; the detail page
   (`pages/AILogDetail.tsx`) shows the full system / user / response
   with copy buttons. Menu entry: `MainLayout.tsx` adds
-  `<FileSearchOutlined /> 请求日志` between "提示词模板" and "设置".
+  `<FileSearchOutlined /> 请求日志` between "提示词管理" and "设置".
 
 ### Tests
 
