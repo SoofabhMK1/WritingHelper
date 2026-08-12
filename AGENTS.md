@@ -9,9 +9,11 @@ A single-user, local-first AI-assisted Chinese novel writing tool.
 
 - **Backend** (FastAPI + SQLAlchemy 2 + SQLite): manages works, volumes,
   chapters, characters, protagonists, events, character states,
-  foreshadowing, app settings (KV); exposes an OpenAI-compatible AI client.
+  foreshadowing, app settings (KV), LLM request/response audit log;
+  exposes an OpenAI-compatible AI client.
 - **Frontend** (React 18 + Vite + TypeScript + Ant Design 5 + Tiptap): a
-  single-page app for the above, with a rich-text editor and AI drawers.
+  single-page app for the above, with a rich-text editor, AI drawers,
+  and an LLM request log.
 - **AI**: configured at runtime via `app_settings` table (UI: `/settings`).
   No AI calls happen without a configured API key; the UI shows clear prompts.
 
@@ -132,6 +134,12 @@ the same machine with different proxy targets** — keep vite.config.ts as is.
   the `<Typography.Title>` inside a `<Space>` at the top of the page.
   When adding any new page under `works/:wid/*`, include this button in
   the same PR.
+  **Exception**: the top-level pages (`/` 作品库, `/settings` 设置,
+  `/prompts` 提示词模板, `/ai-logs` 请求日志) are siblings of each
+  other — they have no "up" in their own hierarchy and therefore
+  **do not render a back button**. Their sub-pages (e.g.
+  `pages/AISettings.tsx`, `pages/AILogDetail.tsx`) do: the detail page
+  shows `返回设置` / `返回请求日志` and links back to its parent.
 - **Settings is a global resource** at `/settings/*`, not scoped under a
   work. It mirrors the `Home → WorkOverview` list/detail pattern:
   `pages/Settings.tsx` is a hard-coded grid of category cards (no
@@ -151,6 +159,17 @@ the same machine with different proxy targets** — keep vite.config.ts as is.
   Adding a prompt on the backend (new `Prompt` instance in
   `PROMPTS`) requires a matching label / description / icon entry in
   `types/prompt.ts` so the UI can render it.
+- **LLM request log** at `/ai-logs/*` is the global audit log of every
+  outgoing LLM call (full system / user / response + status + duration).
+  Captured by `app/services/llm_log.record()` from inside
+  `app/api/v1/ai.py::_call` and `free_chat`. The table is auto-capped at
+  `MAX_LOGS=1000` rows (oldest deleted first). `work_id` uses
+  `ON DELETE SET NULL` so audit history survives work deletion. The
+  frontend list page (`pages/AILogs.tsx`) auto-polls every 30 seconds
+  and supports filters by work / prompt / status; the detail page
+  (`pages/AILogDetail.tsx`) shows the full system / user / response
+  with copy buttons. Menu entry: `MainLayout.tsx` adds
+  `<FileSearchOutlined /> 请求日志` between "提示词模板" and "设置".
 
 ### Tests
 
@@ -234,8 +253,9 @@ catalog — usually paired with a new AI endpoint above):
 - Do not add `console.log` or print statements and leave them in.
 - Do not introduce a new top-level route (`/admin`, `/dashboard`, etc.) —
   resources are scoped under `/works/:wid/...`. The deliberate exceptions
-  are `/settings/*` (global config) and `/prompts/*` (read-only AI prompt
-  catalog) — see the Frontend conventions above.
+  are `/settings/*` (global config), `/prompts/*` (read-only AI prompt
+  catalog), and `/ai-logs/*` (the global LLM request/response audit log)
+  — see the Frontend conventions above.
 - Do not commit the test DB (`tests/_tmp/`) or the actual `data/novel.db`
   — both are gitignored.
 - Do not call `db.delete(work)` without cascading — Work cascades to

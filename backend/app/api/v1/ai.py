@@ -2,10 +2,14 @@
 
 These endpoints hit the configured LLM and return structured JSON. The
 underlying provider is configured via /api/v1/settings (api_key/base_url/model).
+
+Every successful or failed LLM call is captured by the audit log via
+``app.services.llm_log.record()`` — see ``_call`` / ``free_chat``.
 """
 from __future__ import annotations
 
 import json
+import time
 from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -20,6 +24,7 @@ from app.ai.prompts import (
     render,
 )
 from app.database import get_db
+from app.services import llm_log
 
 router = APIRouter(prefix="/ai", tags=["ai"])
 
@@ -110,11 +115,20 @@ def _parse_json(text: str) -> Any:
         raise HTTPException(status_code=502, detail=f"AI 返回的不是合法 JSON: {e}") from e
 
 
-def _call(db: Session, prompt_name: str, variables: dict[str, Any], json_mode: bool = True) -> Any:
+def _call(
+    db: Session,
+    prompt_name: str,
+    variables: dict[str, Any],
+    json_mode: bool = True,
+    *,
+    endpoint: str = "",
+    work_id: Optional[int] = None,
+) -> Any:
     prompt = PROMPTS.get(prompt_name)
     if prompt is None:
         raise HTTPException(status_code=400, detail=f"Unknown prompt: {prompt_name}")
     system, user = render(prompt, variables)
+    started = time.monotonic()
     try:
         text = ai_client.chat(
             db,
@@ -123,8 +137,33 @@ def _call(db: Session, prompt_name: str, variables: dict[str, Any], json_mode: b
             json_mode=json_mode and prompt.json_mode,
         )
     except ai_client.AIServiceError as e:
+        duration_ms = int((time.monotonic() - started) * 1000)
+        status = "not_configured" if e.code == "not_configured" else "error"
+        llm_log.record(
+            db,
+            prompt_name=prompt_name,
+            endpoint=endpoint,
+            system=system,
+            user=user,
+            status=status,
+            error=str(e),
+            duration_ms=duration_ms,
+            work_id=work_id,
+        )
         code = 503 if e.code == "not_configured" else 502
         raise HTTPException(status_code=code, detail=str(e)) from e
+    duration_ms = int((time.monotonic() - started) * 1000)
+    llm_log.record(
+        db,
+        prompt_name=prompt_name,
+        endpoint=endpoint,
+        system=system,
+        user=user,
+        status="ok",
+        response=text,
+        duration_ms=duration_ms,
+        work_id=work_id,
+    )
     if json_mode:
         return _parse_json(text)
     return text
@@ -159,6 +198,8 @@ def suggest_outline(payload: OutlineRequest, db: Session = Depends(get_db)):
             "target_words": target,
             "volume_count": payload.volume_count,
         },
+        endpoint="/ai/suggest/outline",
+        work_id=work.id,
     )
     return {"work_id": work.id, "volumes": data.get("volumes", []), "raw": data}
 
@@ -180,6 +221,8 @@ def suggest_chapters(payload: ChaptersRequest, db: Session = Depends(get_db)):
             "volume_summary": vol.summary or "(无)",
             "target_chapter_count": payload.target_chapter_count,
         },
+        endpoint="/ai/suggest/chapters",
+        work_id=work.id,
     )
     return {"work_id": work.id, "volume_id": vol.id, "chapters": data.get("chapters", []), "raw": data}
 
@@ -196,6 +239,8 @@ def suggest_character(payload: CharacterRequest, db: Session = Depends(get_db)):
             "role": payload.role,
             "existing_chars": ctx.characters_summary(db, work.id),
         },
+        endpoint="/ai/suggest/character",
+        work_id=work.id,
     )
     return {"work_id": work.id, "character": data.get("character", data), "raw": data}
 
@@ -213,6 +258,8 @@ def suggest_event(payload: EventRequest, db: Session = Depends(get_db)):
             "existing_events": ctx.events_summary(db, work.id),
             "count": payload.count,
         },
+        endpoint="/ai/suggest/event",
+        work_id=work.id,
     )
     return {"work_id": work.id, "events": data.get("events", []), "raw": data}
 
@@ -228,6 +275,8 @@ def check_consistency(payload: ConsistencyRequest, db: Session = Depends(get_db)
             "settings_summary": settings_summary,
             "new_content": payload.new_content,
         },
+        endpoint="/ai/check/consistency",
+        work_id=work.id,
     )
     return {"work_id": work.id, "issues": data.get("issues", []), "summary": data.get("summary", ""), "raw": data}
 
@@ -243,11 +292,37 @@ def free_chat(payload: ChatRequest, db: Session = Depends(get_db)):
         PROMPTS["chat"],
         {"context": context_text, "question": payload.question},
     )
+    started = time.monotonic()
     try:
         text = ai_client.chat(db, system=system, user=user, json_mode=False)
     except ai_client.AIServiceError as e:
+        duration_ms = int((time.monotonic() - started) * 1000)
+        status = "not_configured" if e.code == "not_configured" else "error"
+        llm_log.record(
+            db,
+            prompt_name="chat",
+            endpoint="/ai/chat",
+            system=system,
+            user=user,
+            status=status,
+            error=str(e),
+            duration_ms=duration_ms,
+            work_id=payload.work_id,
+        )
         code = 503 if e.code == "not_configured" else 502
         raise HTTPException(status_code=code, detail=str(e)) from e
+    duration_ms = int((time.monotonic() - started) * 1000)
+    llm_log.record(
+        db,
+        prompt_name="chat",
+        endpoint="/ai/chat",
+        system=system,
+        user=user,
+        status="ok",
+        response=text,
+        duration_ms=duration_ms,
+        work_id=payload.work_id,
+    )
     return {"answer": text}
 
 
@@ -324,6 +399,8 @@ def suggest_continue(payload: ContinueRequest, db: Session = Depends(get_db)):
             "target_chars": payload.target_chars,
         },
         json_mode=False,
+        endpoint="/ai/suggest/continue",
+        work_id=work.id,
     )
     # plain text response — extract from prompt return
     return {"work_id": work.id, "chapter_id": ch.id, "text": data}
@@ -343,5 +420,7 @@ def suggest_expand(payload: ExpandRequest, db: Session = Depends(get_db)):
             "target_chars": payload.target_chars,
         },
         json_mode=False,
+        endpoint="/ai/suggest/expand",
+        work_id=work.id,
     )
     return {"work_id": work.id, "text": data}

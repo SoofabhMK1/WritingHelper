@@ -2,6 +2,7 @@ import { Layout, Menu } from "antd";
 import {
   BulbOutlined,
   ExperimentOutlined,
+  FileSearchOutlined,
   HomeOutlined,
   SettingOutlined,
 } from "@ant-design/icons";
@@ -41,6 +42,7 @@ export function MainLayout() {
   let selectedKey = "/";
   if (pathname.startsWith("/settings")) selectedKey = "/settings";
   else if (pathname.startsWith("/prompts")) selectedKey = "/prompts";
+  else if (pathname.startsWith("/ai-logs")) selectedKey = "/ai-logs";
   else if (pathname.startsWith("/works")) selectedKey = "/";
 
   const headerStyle: React.CSSProperties = {
@@ -62,6 +64,7 @@ export function MainLayout() {
           items={[
             { key: "/", icon: <HomeOutlined />, label: "作品库" },
             { key: "/prompts", icon: <ExperimentOutlined />, label: "提示词模板" },
+            { key: "/ai-logs", icon: <FileSearchOutlined />, label: "请求日志" },
             { key: "/settings", icon: <SettingOutlined />, label: "设置" },
           ]}
         />

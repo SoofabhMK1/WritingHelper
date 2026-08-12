@@ -15,6 +15,9 @@ import { Settings } from "@/pages/Settings";
 import { AISettings } from "@/pages/AISettings";
 import { Prompts } from "@/pages/Prompts";
 import { PromptDetail } from "@/pages/PromptDetail";
+import { PromptAssemblyEditorPage } from "@/pages/PromptAssemblyEditorPage";
+import { AILogs } from "@/pages/AILogs";
+import { AILogDetail } from "@/pages/AILogDetail";
 
 function WorkOutlinePage() {
   const { wid } = useParams<{ wid: string }>();
@@ -51,7 +54,18 @@ export const router = createBrowserRouter([
       { path: "settings", element: <Settings /> },
       { path: "settings/ai", element: <AISettings /> },
       { path: "prompts", element: <Prompts /> },
+      {
+        path: "prompts/fragments",
+        element: <Navigate to="/prompts?tab=fragments" replace />,
+      },
+      {
+        path: "prompts/assemblies",
+        element: <Navigate to="/prompts?tab=assemblies" replace />,
+      },
+      { path: "prompts/assemblies/:id", element: <PromptAssemblyEditorPage /> },
       { path: "prompts/:name", element: <PromptDetail /> },
+      { path: "ai-logs", element: <AILogs /> },
+      { path: "ai-logs/:id", element: <AILogDetail /> },
       { path: "works/new", element: <WorkForm /> },
       { path: "works/:wid/edit", element: <WorkForm /> },
       { path: "works/:wid", element: <WorkOverview /> },

@@ -15,6 +15,9 @@ from app.models.event import (
 from app.models.state import CharacterState, StateType
 from app.models.app_setting import AppSetting
 from app.models.foreshadowing import Foreshadowing, ForeshadowStatus
+from app.models.llm_request_log import LlmRequestLog
+from app.models.prompt_assembly import PromptAssembly
+from app.models.prompt_fragment import PromptFragment
 
 __all__ = [
     "Base",
@@ -39,4 +42,7 @@ __all__ = [
     "AppSetting",
     "Foreshadowing",
     "ForeshadowStatus",
+    "LlmRequestLog",
+    "PromptFragment",
+    "PromptAssembly",
 ]
