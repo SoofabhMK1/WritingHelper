@@ -3,6 +3,7 @@ from fastapi import APIRouter
 from app.api.v1 import (
     ai,
     ai_logs,
+    ai_profiles,
     backup,
     chapters,
     characters,
@@ -28,6 +29,7 @@ api_router.include_router(states.router)
 api_router.include_router(foreshadowing.router)
 api_router.include_router(settings.router)
 api_router.include_router(ai.router)
+api_router.include_router(ai_profiles.router)
 api_router.include_router(ai_logs.router)
 api_router.include_router(backup.router)
 api_router.include_router(prompt_fragments.router)

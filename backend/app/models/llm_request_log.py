@@ -11,6 +11,7 @@ class LlmRequestLog(Base, TimestampMixin):
 
     - ``work_id`` 使用 ``ON DELETE SET NULL``:工作被删除后,日志保留,
       仅清空外键引用(参考 ``character_states`` 的约定)。
+    - ``profile_id`` 同理:已删除的 profile 不会级联清掉历史日志。
     - 大文本字段(system / user / response)以 TEXT 存储,详情页按需读取。
     - 列表页只读取 ``LlmRequestLogSummary`` schema 需要的字段,
       ``response`` / ``user`` 的截断预览在 service 层生成。
@@ -32,3 +33,8 @@ class LlmRequestLog(Base, TimestampMixin):
     error: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     duration_ms: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     model: Mapped[Optional[str]] = mapped_column(String(80), nullable=True)
+    profile_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("ai_service_profiles.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    provider: Mapped[Optional[str]] = mapped_column(String(40), nullable=True)

@@ -14,8 +14,13 @@ A single-user, local-first AI-assisted Chinese novel writing tool.
 - **Frontend** (React 18 + Vite + TypeScript + Ant Design 5 + Tiptap): a
   single-page app for the above, with a rich-text editor, AI drawers,
   and an LLM request log.
-- **AI**: configured at runtime via `app_settings` table (UI: `/settings`).
-  No AI calls happen without a configured API key; the UI shows clear prompts.
+- **AI**: configured at runtime as **multiple saved API profiles** (see
+  `ai_service_profiles` / `ai_prompt_assignments`). The user can register
+  any number of OpenAI-compatible endpoints, mark one as default, and
+  optionally bind specific AI services (续写/扩写/大纲 等) to a non-default
+  profile via `ai_prompt_assignments(prompt_name -> profile_id)`. UI lives
+  at `/settings/ai`. A missing API key still raises
+  `AIServiceError(code="not_configured")` → HTTP 503.
 
 Implemented end-to-end (P0–P7). Tests cover everything that has a public
 API. See `README.md` for the user-facing overview.
@@ -59,7 +64,7 @@ xiaoshuo-mk1/
 ## Running it
 
 ```bash
-# Backend (auto: venv + alembic already done; just start)
+# Backend (the start script runs alembic upgrade head automatically — idempotent)
 powershell -File scripts/start-backend.ps1     # 127.0.0.1:8000
 
 # Frontend
@@ -71,6 +76,10 @@ powershell -File scripts/test-all.ps1
 
 The frontend `/api/*` is proxied to the backend by Vite. **Do not run them on
 the same machine with different proxy targets** — keep vite.config.ts as is.
+
+If you run uvicorn directly (without the start script), make sure
+`alembic upgrade head` has been run against the target DB file first —
+otherwise every query fails with `no such table: <name>`.
 
 ## Conventions
 
@@ -88,6 +97,10 @@ the same machine with different proxy targets** — keep vite.config.ts as is.
   - `chapter_id` → `ON DELETE SET NULL` for references that should
     survive chapter deletion (e.g. `character_states`, `events.chapter_id`),
     `ON DELETE CASCADE` when the relationship is owned (e.g. `foreshadowing.chapter_id`)
+  - `ai_prompt_assignments.profile_id` and
+    `llm_request_logs.profile_id` → `ON DELETE SET NULL` (deleting an
+    API profile must not destroy audit history; affected prompts fall
+    back to the default profile)
 - The `SQLite FK pragma=ON` listener is wired in `app/database.py` AND in
   `tests/conftest.py`. **Do not remove the conftest copy** — pytest creates
   its own engine.
@@ -103,10 +116,30 @@ the same machine with different proxy targets** — keep vite.config.ts as is.
 - Test client pattern: override `get_db` with a session bound to a tmp
   engine created in `conftest.py`. Tests that need a work_id create one via
   the public API rather than fabricating rows.
-- AI client lives in `app/ai/client.py`. It reads from `app_settings`
-  table first, then env defaults. A missing API key raises
-  `AIServiceError(code="not_configured")` which the route surfaces as
-  HTTP 503.
+- AI client lives in `app/ai/client.py`. Resolution order at request
+  time: **explicit `ai_prompt_assignments[p]`** → **default
+  `ai_service_profiles` row** → **one-shot legacy migration** from the
+  old single `app_settings` ai.* keys (created as a default profile
+  named `迁移自旧配置`, then those legacy keys are deleted) → **env
+  defaults**. `resolve_config(db, prompt_name=None)` returns an
+  `AIConfig(api_key, base_url, model, temperature, profile_id,
+  profile_name, provider)`; `chat(...)` accepts an optional `cfg=...`
+  so routes can resolve once and pass it through (avoiding double
+  DB hits). A missing API key raises `AIServiceError(code="not_configured")`
+  which the route surfaces as HTTP 503.
+- **Exactly one default profile**: enforced by the service layer inside
+  a single transaction (`app/services/ai_profiles.py::_ensure_single_default`)
+  rather than a DB partial unique index — chosen for multi-writer
+  safety. Any insert/update/delete that toggles `is_default` goes
+  through that helper. When the current default is deleted, the
+  oldest remaining profile is auto-promoted.
+- **`GET /api/v1/ai/status` shape**: returns `{configured, base_url,
+  model, temperature, provider, default_profile_id,
+  default_profile_name, profiles[], assignments{}}`. **Call order
+  matters** inside the handler: `resolve_config(db)` MUST run before
+  `get_default_profile(db)`, because the legacy migration runs as a
+  side-effect of `resolve_config`; reading `default_profile_id`
+  first returns `None` on the first call.
 
 ### Frontend
 
@@ -149,6 +182,13 @@ the same machine with different proxy targets** — keep vite.config.ts as is.
   `pages/<Key>Settings.tsx`, and register `settings/<key>` in
   `router.tsx`. The sidebar `selectedKey` uses prefix matching so "设置"
   stays highlighted on any sub-route.
+  **`pages/AISettings.tsx` is a single consolidated page** covering two
+  concerns: the multi-profile API list (新建 / 编辑 / 删除 / 设为默认)
+  and the per-prompt → API mapping table. The editor is a `Modal`
+  (not a separate page) so navigation stays shallow. Mutations live in
+  `api/aiProfile.ts` and all of them invalidate `["settings", "ai-status"]`
+  so the global status card on `pages/Settings.tsx` and the `AIDrawer`
+  banner refresh in step.
 - **Prompt templates** at `/prompts/*` is a global read-only reference
   for the AI prompts registered in `backend/app/ai/prompts.py`.
   `pages/Prompts.tsx` lists prompts from `GET /api/v1/ai/prompts`;
@@ -228,6 +268,21 @@ catalog — usually paired with a new AI endpoint above):
    new name in the existing parametrized coverage
    (`test_get_prompt_known` walks all names).
 
+**AI service profile / per-prompt assignment** (rarely needed — only
+when adjusting how the multi-API router works):
+1. New profile column / table → new alembic revision + export in
+   `app/models/__init__.py`. Always cascade
+   `ON DELETE SET NULL` from `ai_service_profiles` to assignments and
+   to `llm_request_logs`.
+2. CRUD lives in `app/services/ai_profiles.py` and is exposed under
+   `/api/v1/ai/profiles` + `/api/v1/ai/prompt-assignments`
+   (`app/api/v1/ai_profiles.py`). Keep the contract symmetric: list,
+   create, get, update (PATCH-style with all-`Optional`), delete,
+   set-default.
+3. Frontend mutations live in `frontend/src/api/aiProfile.ts`. Every
+   mutation MUST invalidate `["settings", "ai-status"]` so the global
+   status card and `AIDrawer` refresh.
+
 ## Common gotchas
 
 | Symptom | Cause |
@@ -240,6 +295,9 @@ catalog — usually paired with a new AI endpoint above):
 | `MemoryRouter` / `BrowserRouter` test fails with `Cannot read properties of undefined (reading 'matches')` | `matchMedia` not mocked — extend `src/test/setup.ts` |
 | Test of store with module-level singleton fails | Use `vi.resetModules()` + dynamic `await import()` |
 | AI endpoint returns 503 in tests | Expected when no API key is set; tests should mock `app.ai.client.chat` or assert the 503 |
+| Runtime `no such table: works` (or any other table) after a fresh checkout | `data/novel.db` was created without ever running migrations. Run `alembic upgrade head`; `scripts/start-backend.ps1` does this automatically (idempotent). |
+| Alembic `NotImplementedError: No support for ALTER of constraints in SQLite` / `ValueError: Constraint must have a name` when adding an FK to an existing table | Wrap the operation in `with op.batch_alter_table(...)` and call `batch.create_foreign_key("fk_<table>_<col>", "<target>", [...], [...], ondelete=...)` with an explicit name. See `0012_llm_log_profile.py`. |
+| New mutation that should also refresh the AI status banner / AIDrawer but doesn't | Invalidate `["settings", "ai-status"]` — react-query prefix-matches against the `settingKeys.all = ["settings"]` namespace used by `useAIStatus`. |
 | React Router warnings about future flags | Harmless; ignore |
 
 ## What NOT to do
@@ -299,4 +357,7 @@ cd frontend && npm run lint
 
 # Live smoke against running backend (replace 8014 if busy)
 .venv\Scripts\python.exe -c "import httpx; print(httpx.get('http://127.0.0.1:8000/api/v1/works').json())"
+
+# AI status / profiles / assignments smoke
+.venv\Scripts\python.exe -c "import httpx; print(httpx.get('http://127.0.0.1:8000/api/v1/ai/status').json())"
 ```

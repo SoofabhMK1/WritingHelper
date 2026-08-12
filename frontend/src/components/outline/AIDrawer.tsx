@@ -91,7 +91,7 @@ export function AIDrawer({
           message="AI 尚未配置"
           description={
             <span>
-              请先到<Link to="/settings" style={{ marginLeft: 4 }}>设置</Link>填写 API Key / Base URL / 模型。
+              请先到<Link to="/settings" style={{ marginLeft: 4 }}>设置</Link>添加 API 配置。
               <br />
               当前状态:{aiStatus ? `model=${aiStatus.model}, base_url=${aiStatus.base_url}` : "加载中"}
             </span>
@@ -105,7 +105,12 @@ export function AIDrawer({
           type="success"
           showIcon
           icon={<CheckCircleOutlined />}
-          message={`AI 已就绪 (${aiStatus?.model})`}
+          message={`AI 已就绪 — ${aiStatus?.default_profile_name ?? "默认"} · ${aiStatus?.model}`}
+          description={
+            aiStatus?.default_profile_name
+              ? `默认 API 配置:${aiStatus.default_profile_name}`
+              : undefined
+          }
           style={{ marginBottom: 12 }}
         />
       )}

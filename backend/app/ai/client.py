@@ -1,10 +1,8 @@
 """AI client wrapping OpenAI-compatible HTTP API.
 
-Reads configuration from:
-1. app_settings table (runtime overrides)
-2. environment / .env defaults
-
-Settings table takes precedence over .env.
+Reads configuration from saved ``ai_service_profiles`` (multi-profile
+with a default + per-prompt assignments). Falls back to env defaults
+when no profile is configured.
 """
 from __future__ import annotations
 
@@ -14,13 +12,7 @@ from typing import Optional
 from sqlalchemy.orm import Session
 
 from app.config import settings as env_settings
-from app.services.settings import (
-    KEY_API_KEY,
-    KEY_BASE_URL,
-    KEY_MODEL,
-    KEY_TEMPERATURE,
-    get_setting,
-)
+from app.services.ai_profiles import resolve_profile
 
 
 @dataclass
@@ -29,40 +21,48 @@ class AIConfig:
     base_url: str
     model: str
     temperature: float = 0.7
+    profile_id: Optional[int] = None
+    profile_name: Optional[str] = None
+    provider: str = ""
 
     @property
     def is_configured(self) -> bool:
         return bool(self.api_key)
 
 
-def resolve_config(db: Optional[Session] = None) -> AIConfig:
-    api_key = env_settings.openai_api_key
-    base_url = env_settings.openai_base_url
-    model = env_settings.openai_model
-    temperature = 0.7
+def resolve_config(
+    db: Optional[Session] = None,
+    prompt_name: Optional[str] = None,
+) -> AIConfig:
+    """Pick the right config for ``prompt_name``.
 
+    Resolution order:
+
+      1. saved profile (explicit assignment → default → legacy migration)
+      2. env defaults (``openai_api_key`` / ``openai_base_url`` /
+         ``openai_model``)
+
+    Returns an ``AIConfig`` with empty ``api_key`` if nothing is set —
+    callers should surface a 503 via ``get_client``.
+    """
     if db is not None:
-        v = get_setting(db, KEY_API_KEY)
-        if v:
-            api_key = v
-        v = get_setting(db, KEY_BASE_URL)
-        if v:
-            base_url = v
-        v = get_setting(db, KEY_MODEL)
-        if v:
-            model = v
-        v = get_setting(db, KEY_TEMPERATURE)
-        if v:
-            try:
-                temperature = float(v)
-            except ValueError:
-                pass
+        profile = resolve_profile(db, prompt_name)
+        if profile is not None:
+            return AIConfig(
+                api_key=profile.api_key or "",
+                base_url=profile.base_url,
+                model=profile.model,
+                temperature=profile.temperature,
+                profile_id=profile.id,
+                profile_name=profile.name,
+                provider=profile.provider,
+            )
 
     return AIConfig(
-        api_key=api_key or "",
-        base_url=base_url,
-        model=model,
-        temperature=temperature,
+        api_key=env_settings.openai_api_key or "",
+        base_url=env_settings.openai_base_url or "https://api.openai.com/v1",
+        model=env_settings.openai_model or "gpt-4o-mini",
+        temperature=0.7,
     )
 
 
@@ -95,9 +95,17 @@ def chat(
     model: Optional[str] = None,
     temperature: Optional[float] = None,
     json_mode: bool = False,
+    prompt_name: Optional[str] = None,
+    cfg: Optional[AIConfig] = None,
 ) -> str:
-    """One-shot chat completion. Returns the assistant text content."""
-    cfg = resolve_config(db)
+    """One-shot chat completion. Returns the assistant text content.
+
+    ``cfg`` may be passed in by callers that have already resolved the
+    config (so we don't query the DB twice). When omitted, falls back to
+    :func:`resolve_config` with ``prompt_name``.
+    """
+    if cfg is None:
+        cfg = resolve_config(db, prompt_name=prompt_name)
     client = get_client(cfg)
 
     kwargs = {

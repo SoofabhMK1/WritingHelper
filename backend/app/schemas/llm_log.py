@@ -26,6 +26,8 @@ class LlmRequestLogSummary(BaseModel):
     status: LlmLogStatus
     duration_ms: int
     model: Optional[str] = None
+    provider: Optional[str] = None
+    profile_id: Optional[int] = None
     user_preview: str = ""
     response_preview: str = ""
     error: Optional[str] = None
@@ -51,6 +53,8 @@ class LlmRequestLogDetail(BaseModel):
     error: Optional[str] = None
     duration_ms: int
     model: Optional[str] = None
+    provider: Optional[str] = None
+    profile_id: Optional[int] = None
     created_at: datetime
     updated_at: datetime
 

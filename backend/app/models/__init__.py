@@ -13,6 +13,8 @@ from app.models.event import (
     EventType,
 )
 from app.models.state import CharacterState, StateType
+from app.models.ai_prompt_assignment import AIPromptAssignment
+from app.models.ai_service_profile import AIServiceProfile
 from app.models.app_setting import AppSetting
 from app.models.foreshadowing import Foreshadowing, ForeshadowStatus
 from app.models.llm_request_log import LlmRequestLog
@@ -45,4 +47,6 @@ __all__ = [
     "LlmRequestLog",
     "PromptFragment",
     "PromptAssembly",
+    "AIServiceProfile",
+    "AIPromptAssignment",
 ]

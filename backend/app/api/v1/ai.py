@@ -1,7 +1,11 @@
-"""AI routes: outline / chapters / character / event / chat / consistency.
+"""AI routes: outline / chapters / character / event / chat / consistency /
+continue / expand.
 
 These endpoints hit the configured LLM and return structured JSON. The
-underlying provider is configured via /api/v1/settings (api_key/base_url/model).
+underlying provider is chosen per request via ``app.services.ai_profiles``:
+an explicit prompt → profile assignment wins; otherwise the call uses
+the default saved profile. If no profile is configured, the call falls
+back to environment variables and finally returns 503.
 
 Every successful or failed LLM call is captured by the audit log via
 ``app.services.llm_log.record()`` — see ``_call`` / ``free_chat``.
@@ -25,6 +29,12 @@ from app.ai.prompts import (
 )
 from app.database import get_db
 from app.services import llm_log
+from app.services.ai_profiles import (
+    get_default_profile,
+    list_assignments,
+    list_profiles,
+    profile_to_summary,
+)
 
 router = APIRouter(prefix="/ai", tags=["ai"])
 
@@ -128,6 +138,7 @@ def _call(
     if prompt is None:
         raise HTTPException(status_code=400, detail=f"Unknown prompt: {prompt_name}")
     system, user = render(prompt, variables)
+    cfg = ai_client.resolve_config(db, prompt_name=prompt_name)
     started = time.monotonic()
     try:
         text = ai_client.chat(
@@ -135,6 +146,8 @@ def _call(
             system=system,
             user=user,
             json_mode=json_mode and prompt.json_mode,
+            prompt_name=prompt_name,
+            cfg=cfg,
         )
     except ai_client.AIServiceError as e:
         duration_ms = int((time.monotonic() - started) * 1000)
@@ -149,6 +162,9 @@ def _call(
             error=str(e),
             duration_ms=duration_ms,
             work_id=work_id,
+            profile_id=cfg.profile_id,
+            provider=cfg.provider,
+            model=cfg.model,
         )
         code = 503 if e.code == "not_configured" else 502
         raise HTTPException(status_code=code, detail=str(e)) from e
@@ -163,6 +179,9 @@ def _call(
         response=text,
         duration_ms=duration_ms,
         work_id=work_id,
+        profile_id=cfg.profile_id,
+        provider=cfg.provider,
+        model=cfg.model,
     )
     if json_mode:
         return _parse_json(text)
@@ -292,9 +311,17 @@ def free_chat(payload: ChatRequest, db: Session = Depends(get_db)):
         PROMPTS["chat"],
         {"context": context_text, "question": payload.question},
     )
+    cfg = ai_client.resolve_config(db, prompt_name="chat")
     started = time.monotonic()
     try:
-        text = ai_client.chat(db, system=system, user=user, json_mode=False)
+        text = ai_client.chat(
+            db,
+            system=system,
+            user=user,
+            json_mode=False,
+            prompt_name="chat",
+            cfg=cfg,
+        )
     except ai_client.AIServiceError as e:
         duration_ms = int((time.monotonic() - started) * 1000)
         status = "not_configured" if e.code == "not_configured" else "error"
@@ -308,6 +335,9 @@ def free_chat(payload: ChatRequest, db: Session = Depends(get_db)):
             error=str(e),
             duration_ms=duration_ms,
             work_id=payload.work_id,
+            profile_id=cfg.profile_id,
+            provider=cfg.provider,
+            model=cfg.model,
         )
         code = 503 if e.code == "not_configured" else 502
         raise HTTPException(status_code=code, detail=str(e)) from e
@@ -322,18 +352,31 @@ def free_chat(payload: ChatRequest, db: Session = Depends(get_db)):
         response=text,
         duration_ms=duration_ms,
         work_id=payload.work_id,
+        profile_id=cfg.profile_id,
+        provider=cfg.provider,
+        model=cfg.model,
     )
     return {"answer": text}
 
 
 @router.get("/status")
 def ai_status(db: Session = Depends(get_db)):
-    cfg = ai_client.resolve_config(db)
+    """Return the default profile's effective config + saved profiles +
+    per-prompt assignments. The legacy single ``app_settings`` ai.* keys
+    are migrated into a default profile on first access; from then on the
+    legacy rows are removed and no longer appear here."""
+    cfg = ai_client.resolve_config(db)  # may run legacy migration
+    default = get_default_profile(db)
     return {
         "configured": cfg.is_configured,
         "base_url": cfg.base_url,
         "model": cfg.model,
         "temperature": cfg.temperature,
+        "provider": cfg.provider,
+        "default_profile_id": default.id if default else None,
+        "default_profile_name": default.name if default else None,
+        "profiles": [profile_to_summary(p) for p in list_profiles(db)],
+        "assignments": list_assignments(db),
     }
 
 

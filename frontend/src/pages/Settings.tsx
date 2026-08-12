@@ -17,13 +17,16 @@ export function Settings() {
   const navigate = useNavigate();
   const { data: aiStatus } = useAIStatus();
 
+  const profileCount = aiStatus?.profiles?.length ?? 0;
+  const assignmentCount = Object.keys(aiStatus?.assignments ?? {}).length;
+
   const items: SettingItem[] = [
     {
       key: "ai",
       title: "AI 服务配置",
       description: aiStatus?.configured
-        ? `已配置 — ${aiStatus.model} @ ${aiStatus.base_url}`
-        : "配置 OpenAI 兼容协议的 API Key、Base URL、模型等",
+        ? `默认 ${aiStatus.default_profile_name ?? "未命名"} · ${aiStatus.model} @ ${aiStatus.base_url} · ${profileCount} 个 API 配置,${assignmentCount} 个专属绑定`
+        : "管理多个 OpenAI 兼容 API、设置默认、为各 AI 服务单独绑定",
       icon: <KeyOutlined style={{ fontSize: 24 }} />,
       to: "/settings/ai",
     },

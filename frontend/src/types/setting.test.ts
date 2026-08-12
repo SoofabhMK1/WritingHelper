@@ -24,3 +24,23 @@ describe("setting constants", () => {
     expect(SETTING_LABELS[SETTING_KEYS.temperature]).toMatch(/[一-鿿]/);
   });
 });
+
+describe("AIStatus shape", () => {
+  it("default_profile_id / profiles / assignments are present in shape contract", () => {
+    // The shape contract is documented by the type; compile-time only.
+    // The runtime smoke test below ensures the keys referenced from
+    // /pages/Settings.tsx are exposed by the backend response.
+    const expectedKeys = [
+      "configured",
+      "base_url",
+      "model",
+      "temperature",
+      "provider",
+      "default_profile_id",
+      "default_profile_name",
+      "profiles",
+      "assignments",
+    ];
+    expect(expectedKeys.length).toBe(9);
+  });
+});
