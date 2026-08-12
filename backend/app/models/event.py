@@ -1,0 +1,108 @@
+from enum import Enum
+from typing import Optional
+
+from sqlalchemy import ForeignKey, Index, Integer, String, Text, UniqueConstraint
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+
+from app.models.base import Base, TimestampMixin
+
+
+class EventType(str, Enum):
+    MAIN = "main"
+    BRANCH = "branch"
+    FORESHADOW = "foreshadow"
+    CLIMAX = "climax"
+    BACKSTORY = "backstory"
+    REVEAL = "reveal"
+
+
+class EventStatus(str, Enum):
+    PLANNED = "planned"
+    ACTIVE = "active"
+    RESOLVED = "resolved"
+    ABANDONED = "abandoned"
+
+
+class Event(Base, TimestampMixin):
+    __tablename__ = "events"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    work_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("works.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    chapter_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("chapters.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    title: Mapped[str] = mapped_column(String(200), nullable=False)
+    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    event_type: Mapped[str] = mapped_column(
+        String(20), default=EventType.MAIN.value, nullable=False, index=True
+    )
+    story_time: Mapped[Optional[str]] = mapped_column(String(120), nullable=True, index=True)
+    location: Mapped[Optional[str]] = mapped_column(String(120), nullable=True)
+    importance: Mapped[int] = mapped_column(Integer, default=3, nullable=False)
+    status: Mapped[str] = mapped_column(
+        String(20), default=EventStatus.PLANNED.value, nullable=False, index=True
+    )
+    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
+    character_links: Mapped[list["EventCharacter"]] = relationship(  # noqa: F821
+        back_populates="event",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
+
+
+class EventCharacter(Base):
+    __tablename__ = "event_characters"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    event_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("events.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    character_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("characters.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    role: Mapped[str] = mapped_column(String(40), default="participant", nullable=False)
+    note: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+
+    event: Mapped["Event"] = relationship(back_populates="character_links")
+
+    __table_args__ = (UniqueConstraint("event_id", "character_id", name="uq_event_character"),)
+
+
+class EventLinkType(str, Enum):
+    CAUSES = "causes"
+    BLOCKS = "blocks"
+    ENABLES = "enables"
+    CONTRASTS = "contrasts"
+    PARALLELS = "parallels"
+
+
+class EventLink(Base):
+    __tablename__ = "event_links"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    work_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("works.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    source_event_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("events.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    target_event_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("events.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    link_type: Mapped[str] = mapped_column(String(20), default=EventLinkType.CAUSES.value, nullable=False)
+    note: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    created_at: Mapped[Optional[str]] = mapped_column(String(40), nullable=True)
+
+    __table_args__ = (
+        UniqueConstraint("source_event_id", "target_event_id", "link_type", name="uq_event_link"),
+        Index("ix_event_link_pair", "source_event_id", "target_event_id"),
+    )

@@ -1,0 +1,55 @@
+html, body, #root {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+#root {
+  display: flex;
+  flex-direction: column;
+}
+
+.app-logo {
+  height: 32px;
+  margin: 16px;
+  font-size: 20px;
+  font-weight: 600;
+  color: #fff;
+  text-align: center;
+  letter-spacing: 2px;
+}
+
+.work-card-stat {
+  display: flex;
+  justify-content: space-between;
+  color: rgba(0, 0, 0, 0.55);
+  font-size: 13px;
+}
+
+.work-card-progress {
+  margin-top: 8px;
+}
+
+.empty-state {
+  padding: 80px 0;
+  text-align: center;
+}
+
+/* Dark theme baseline */
+[data-theme="dark"] body {
+  background-color: #141414;
+  color: rgba(255, 255, 255, 0.85);
+}
+
+[data-theme="dark"] .ant-layout {
+  background: #141414;
+}
+
+[data-theme="dark"] .ant-layout-header {
+  background: #1f1f1f !important;
+}
+
+[data-theme="dark"] .ant-card,
+[data-theme="dark"] .ant-modal-content {
+  background: #1f1f1f;
+}
