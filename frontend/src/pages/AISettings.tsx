@@ -62,6 +62,7 @@ const DEFAULT_BASE_URL = "https://api.openai.com/v1";
 const DEFAULT_MODEL = "gpt-4o-mini";
 const DEFAULT_TEMP = 0.7;
 const DEFAULT_PROVIDER = "custom";
+const DEFAULT_PROFILE_VALUE = "__default__";
 
 export function AISettings() {
   const navigate = useNavigate();
@@ -399,14 +400,21 @@ export function AISettings() {
                 render: (_v, row) => (
                   <Select
                     style={{ minWidth: 280 }}
-                    value={assignments[row.name] ?? null}
+                    value={
+                      assignments[row.name] != null
+                        ? String(assignments[row.name])
+                        : DEFAULT_PROFILE_VALUE
+                    }
                     onChange={(value) =>
-                      onChangeAssignment(row.name as PromptName, value)
+                      onChangeAssignment(
+                        row.name as PromptName,
+                        value === DEFAULT_PROFILE_VALUE ? null : Number(value)
+                      )
                     }
                     options={[
-                      { value: null, label: "使用默认 API" },
+                      { value: DEFAULT_PROFILE_VALUE, label: "使用默认 API" },
                       ...profiles.map((p) => ({
-                        value: p.id,
+                        value: String(p.id),
                         label: `${p.name} · ${p.model}${
                           p.is_default ? " (默认)" : ""
                         }`,
@@ -436,7 +444,7 @@ export function AISettings() {
         okText="保存"
         cancelText="取消"
         confirmLoading={createMut.isPending || updateMut.isPending}
-        destroyOnClose
+        destroyOnHidden
         width={560}
       >
         <Form layout="vertical" form={editorForm} requiredMark="optional">

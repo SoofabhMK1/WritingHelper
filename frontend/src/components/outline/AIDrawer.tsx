@@ -65,7 +65,7 @@ export function AIDrawer({
       title={title}
       placement="right"
       width={460}
-      destroyOnClose={false}
+      destroyOnHidden={false}
     >
       {target && (
         <>

@@ -10,8 +10,8 @@ import sys
 sys.path.insert(0, str(BASE_DIR))
 
 from app.config import settings
-from app.database import Base
 from app.models import *  # noqa: F401,F403  触发模型注册
+from app.models.base import Base
 
 config = context.config
 

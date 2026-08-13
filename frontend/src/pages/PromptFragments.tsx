@@ -308,7 +308,7 @@ export function PromptFragments() {
         confirmLoading={creating || updating}
         okText="保存"
         cancelText="取消"
-        destroyOnClose
+        destroyOnHidden
         width={640}
       >
         <Form
