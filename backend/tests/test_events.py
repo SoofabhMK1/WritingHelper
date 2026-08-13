@@ -219,6 +219,18 @@ class TestEventLinks:
         )
         assert r.status_code == 400
 
+    def test_url_event_id_must_match_body(self, client, work_id):
+        """URL event_id is meaningless if it doesn't match source or target."""
+        a = self._mk(client, work_id, "A")
+        b = self._mk(client, work_id, "B")
+        c = self._mk(client, work_id, "C")
+        r = client.post(
+            f"/api/v1/works/{work_id}/events/{c}/links",
+            json={"source_event_id": a, "target_event_id": b},
+        )
+        assert r.status_code == 400
+        assert "URL event_id" in r.json()["detail"]
+
     def test_cross_work_404(self, client, work_id):
         a = self._mk(client, work_id, "A")
         other = client.post("/api/v1/works", json={"title": "o"}).json()["id"]

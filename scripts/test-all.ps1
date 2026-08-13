@@ -19,6 +19,7 @@ function Step($name, $cmd, $cwd) {
 }
 
 Step "Backend pytest"  { .venv\Scripts\python.exe -m pytest -v } $backend
+Step "Frontend typecheck" { npm run typecheck }             $frontend
 Step "Frontend lint"  { npm run lint }                       $frontend
 Step "Frontend vitest" { npx vitest run --testTimeout 15000 } $frontend
 Step "Frontend build" { npm run build }                      $frontend

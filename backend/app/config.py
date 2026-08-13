@@ -1,10 +1,8 @@
 from functools import lru_cache
 from pathlib import Path
-from typing import List
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
-
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 DATA_DIR = BASE_DIR / "data"
@@ -20,12 +18,12 @@ class Settings(BaseSettings):
     )
 
     app_name: str = "xiaoshuo-mk1"
-    app_debug: bool = True
+    app_debug: bool = False
 
     database_url: str = f"sqlite+aiosqlite:///{DATA_DIR.as_posix()}/novel.db"
     alembic_database_url: str = f"sqlite:///{DATA_DIR.as_posix()}/novel.db"
 
-    cors_origins: List[str] = Field(
+    cors_origins: list[str] = Field(
         default_factory=lambda: ["http://localhost:5173", "http://127.0.0.1:5173"]
     )
 

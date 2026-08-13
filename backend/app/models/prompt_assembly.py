@@ -1,4 +1,3 @@
-from typing import Optional
 
 from sqlalchemy import Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
@@ -21,7 +20,7 @@ class PromptAssembly(Base, TimestampMixin):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     name: Mapped[str] = mapped_column(String(120), nullable=False)
-    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
     system_parts_json: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
     user_parts_json: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
     sample_vars_json: Mapped[str] = mapped_column(Text, nullable=False, default="{}")

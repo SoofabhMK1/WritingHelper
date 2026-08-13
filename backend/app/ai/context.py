@@ -7,12 +7,25 @@ from __future__ import annotations
 
 from sqlalchemy.orm import Session
 
-from app.models.character import Character
 from app.models.chapter import Chapter
+from app.models.character import Character
 from app.models.event import Event
 from app.models.protagonist import ProtagonistProfile
 from app.models.state import CharacterState
 from app.models.work import Work
+
+# Per-field character cap applied to free-text columns. Long pastes from
+# the editor would otherwise blow up the prompt; an ellipsis marker tells
+# the model that the value was truncated.
+FIELD_CAP = 200
+
+
+def _cap(text: str | None) -> str:
+    if not text:
+        return ""
+    if len(text) <= FIELD_CAP:
+        return text
+    return text[:FIELD_CAP] + "…"
 
 
 def work_summary(db: Session, work_id: int) -> str:
@@ -25,8 +38,8 @@ def work_summary(db: Session, work_id: int) -> str:
         f"风格:{work.style or '—'}\n"
         f"视角:{work.pov or '—'}\n"
         f"目标字数:{work.target_words}\n"
-        f"简介:{work.description or '—'}\n"
-        f"备注:{work.notes or '—'}"
+        f"简介:{_cap(work.description) or '—'}\n"
+        f"备注:{_cap(work.notes) or '—'}"
     )
 
 
@@ -44,9 +57,9 @@ def characters_summary(db: Session, work_id: int, limit: int = 30) -> str:
     for c in chars:
         line = f"- [{c.role}] {c.name}"
         if c.aliases:
-            line += f"({c.aliases})"
+            line += f"({_cap(c.aliases)})"
         if c.personality:
-            line += f":{c.personality[:60]}"
+            line += f":{_cap(c.personality)}"
         lines.append(line)
     return "\n".join(lines)
 
@@ -64,7 +77,7 @@ def events_summary(db: Session, work_id: int, limit: int = 30) -> str:
     lines = []
     for e in events:
         time = e.story_time or "—"
-        lines.append(f"- [{e.event_type}|{time}|imp{e.importance}] {e.title}")
+        lines.append(f"- [{e.event_type}|{time}|imp{e.importance}] {_cap(e.title)}")
     return "\n".join(lines)
 
 
@@ -79,7 +92,7 @@ def chapters_summary(db: Session, work_id: int, limit: int = 30) -> str:
     if not chapters:
         return "(尚无章节)"
     return "\n".join(
-        f"- {c.order_num}. {c.title} [{c.status}]" for c in chapters
+        f"- {c.order_num}. {_cap(c.title)} [{c.status}]" for c in chapters
     )
 
 
@@ -94,7 +107,7 @@ def states_summary(db: Session, work_id: int, limit: int = 30) -> str:
     if not states:
         return "(尚无人物状态)"
     return "\n".join(
-        f"- char#{s.character_id} {s.state_type}.{s.state_key}={s.state_value}"
+        f"- char#{s.character_id} {s.state_type}.{s.state_key}={_cap(s.state_value)}"
         + (f" @{s.captured_at}" if s.captured_at else "")
         for s in states
     )
@@ -114,11 +127,11 @@ def protagonists_summary(db: Session, work_id: int) -> str:
         ch = chars.get(p.character_id)
         head = f"- 主角 {ch.name if ch else '#' + str(p.character_id)}"
         if p.core_conflict:
-            head += f" 核心冲突:{p.core_conflict}"
+            head += f" 核心冲突:{_cap(p.core_conflict)}"
         if p.lie_believed:
-            head += f" 谎言:{p.lie_believed}"
+            head += f" 谎言:{_cap(p.lie_believed)}"
         if p.truth_needed:
-            head += f" 真相:{p.truth_needed}"
+            head += f" 真相:{_cap(p.truth_needed)}"
         lines.append(head)
     return "\n".join(lines)
 

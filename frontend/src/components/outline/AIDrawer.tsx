@@ -3,6 +3,7 @@ import {
   Alert,
   Button,
   Card,
+  Drawer,
   Form,
   Input,
   InputNumber,
@@ -37,12 +38,8 @@ import {
 } from "@/api/ai";
 import { useCreateVolume, useVolumes } from "@/api/volumes";
 import { useCreateChapter, useChapters } from "@/api/chapters";
-import type { Chapter, ChapterTypeKind, Volume } from "@/types";
-
-export type AIDrawerTarget =
-  | { kind: "volume"; workId: number; volume: Volume }
-  | { kind: "chapter"; workId: number; chapter: Chapter }
-  | null;
+import type { Chapter, ChapterTypeKind } from "@/types";
+import type { AIDrawerTarget } from "@/store/aiDrawer";
 
 export function AIDrawer({
   target,
@@ -54,72 +51,63 @@ export function AIDrawer({
   const { data: aiStatus } = useAIStatus();
   const configured = aiStatus?.configured ?? false;
 
-  if (!target) return null;
-  const title =
-    target.kind === "volume"
+  const open = target !== null;
+  const title = target
+    ? target.kind === "volume"
       ? `AI 辅助 — ${target.volume.title}`
-      : `AI 辅助 — ${target.chapter.title}`;
+      : `AI 辅助 — ${target.chapter.title}`
+    : "";
 
   return (
-    <div
-      style={{
-        position: "fixed",
-        top: 64,
-        right: 0,
-        bottom: 0,
-        width: 420,
-        background: "#fff",
-        borderLeft: "1px solid #eee",
-        boxShadow: "-2px 0 8px rgba(0,0,0,0.05)",
-        padding: 16,
-        overflowY: "auto",
-        zIndex: 100,
-      }}
+    <Drawer
+      open={open}
+      onClose={onClose}
+      title={title}
+      placement="right"
+      width={460}
+      destroyOnClose={false}
     >
-      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 12 }}>
-        <strong>{title}</strong>
-        <a onClick={onClose} style={{ cursor: "pointer" }}>
-          关闭
-        </a>
-      </div>
+      {target && (
+        <>
+          {!configured && (
+            <Alert
+              type="warning"
+              showIcon
+              icon={<CloseCircleOutlined />}
+              message="AI 尚未配置"
+              description={
+                <span>
+                  请先到<Link to="/settings" style={{ marginLeft: 4 }}>设置</Link>添加 API 配置。
+                  <br />
+                  当前状态:{aiStatus ? `model=${aiStatus.model}, base_url=${aiStatus.base_url}` : "加载中"}
+                </span>
+              }
+              style={{ marginBottom: 12 }}
+            />
+          )}
 
-      {!configured && (
-        <Alert
-          type="warning"
-          showIcon
-          icon={<CloseCircleOutlined />}
-          message="AI 尚未配置"
-          description={
-            <span>
-              请先到<Link to="/settings" style={{ marginLeft: 4 }}>设置</Link>添加 API 配置。
-              <br />
-              当前状态:{aiStatus ? `model=${aiStatus.model}, base_url=${aiStatus.base_url}` : "加载中"}
-            </span>
-          }
-          style={{ marginBottom: 12 }}
-        />
-      )}
+          {configured && (
+            <Alert
+              type="success"
+              showIcon
+              icon={<CheckCircleOutlined />}
+              message={`AI 已就绪 — ${aiStatus?.default_profile_name ?? "默认"} · ${aiStatus?.model}`}
+              description={
+                aiStatus?.default_profile_name
+                  ? `默认 API 配置:${aiStatus.default_profile_name}`
+                  : undefined
+              }
+              style={{ marginBottom: 12 }}
+            />
+          )}
 
-      {configured && (
-        <Alert
-          type="success"
-          showIcon
-          icon={<CheckCircleOutlined />}
-          message={`AI 已就绪 — ${aiStatus?.default_profile_name ?? "默认"} · ${aiStatus?.model}`}
-          description={
-            aiStatus?.default_profile_name
-              ? `默认 API 配置:${aiStatus.default_profile_name}`
-              : undefined
-          }
-          style={{ marginBottom: 12 }}
-        />
+          {target.kind === "volume" && (
+            <VolumePanel workId={target.workId} volumeId={target.volume.id} />
+          )}
+          {target.kind === "chapter" && <ChapterPanel workId={target.workId} chapter={target.chapter} />}
+        </>
       )}
-
-      {target.kind === "volume" && (
-        <VolumePanel workId={target.workId} volumeId={target.volume.id} />
-      )}
-      {target.kind === "chapter" && <ChapterPanel workId={target.workId} chapter={target.chapter} />}
-    </div>
+    </Drawer>
   );
 }
 

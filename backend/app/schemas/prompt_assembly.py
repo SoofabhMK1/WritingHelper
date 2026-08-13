@@ -1,10 +1,8 @@
 from datetime import datetime
 from json import loads as _json_loads
-from typing import Any, Dict, List, Literal, Optional, Union
+from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
-from typing_extensions import Annotated
-
 
 # ============================================================================
 # Part — discriminated union over `type`
@@ -32,7 +30,7 @@ class VariablePart(BaseModel):
 
 
 Part = Annotated[
-    Union[FragmentPart, BuiltinPart, TextPart, VariablePart],
+    FragmentPart | BuiltinPart | TextPart | VariablePart,
     Field(discriminator="type"),
 ]
 
@@ -43,10 +41,10 @@ Part = Annotated[
 
 class PromptAssemblyBase(BaseModel):
     name: str = Field(..., min_length=1, max_length=120)
-    description: Optional[str] = None
-    system_parts: List[Part] = Field(default_factory=list)
-    user_parts: List[Part] = Field(default_factory=list)
-    sample_vars: Dict[str, Any] = Field(default_factory=dict)
+    description: str | None = None
+    system_parts: list[Part] = Field(default_factory=list)
+    user_parts: list[Part] = Field(default_factory=list)
+    sample_vars: dict[str, Any] = Field(default_factory=dict)
 
 
 class PromptAssemblyCreate(PromptAssemblyBase):
@@ -54,11 +52,11 @@ class PromptAssemblyCreate(PromptAssemblyBase):
 
 
 class PromptAssemblyUpdate(BaseModel):
-    name: Optional[str] = Field(None, min_length=1, max_length=120)
-    description: Optional[str] = None
-    system_parts: Optional[List[Part]] = None
-    user_parts: Optional[List[Part]] = None
-    sample_vars: Optional[Dict[str, Any]] = None
+    name: str | None = Field(None, min_length=1, max_length=120)
+    description: str | None = None
+    system_parts: list[Part] | None = None
+    user_parts: list[Part] | None = None
+    sample_vars: dict[str, Any] | None = None
 
 
 class PromptAssemblyOut(PromptAssemblyBase):
@@ -98,7 +96,7 @@ class PromptAssemblyOut(PromptAssemblyBase):
 # ============================================================================
 
 class AssemblyRenderRequest(BaseModel):
-    variables: Dict[str, Any] = Field(default_factory=dict)
+    variables: dict[str, Any] = Field(default_factory=dict)
 
 
 class AssemblyRenderResult(BaseModel):

@@ -12,16 +12,16 @@ from sqlalchemy.orm import Session
 from app.ai import prompts as ai_prompts
 from app.database import get_db
 from app.schemas.ai_prompt_template import (
-    AIClonePromptRequest,
     AIBuiltInPromptDetail,
     AIBuiltInPromptSummary,
+    AIClonePromptRequest,
     AIPromptTemplateBindingOut,
     AIPromptTemplateBindingsOut,
     AIPromptTemplateBindingUpdate,
 )
 from app.schemas.prompt_assembly import PromptAssemblyOut
 from app.services import ai_prompt_template as svc
-
+from app.services.ai_prompt_template import UnknownAssemblyError, UnknownPromptError
 
 router = APIRouter(prefix="/ai", tags=["ai"])
 
@@ -99,7 +99,12 @@ def put_template_binding(
     payload: AIPromptTemplateBindingUpdate,
     db: Session = Depends(get_db),
 ):
-    return svc.set_binding(db, prompt_name, payload.assembly_id)
+    try:
+        return svc.set_binding(db, prompt_name, payload.assembly_id)
+    except UnknownPromptError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except UnknownAssemblyError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
 
 
 @router.delete(
@@ -130,10 +135,13 @@ def clone_builtin_prompt(
     payload: AIClonePromptRequest,
     db: Session = Depends(get_db),
 ):
-    assembly = svc.clone_builtin_to_assembly(
-        db,
-        prompt_name,
-        name=payload.name,
-        description=payload.description,
-    )
+    try:
+        assembly = svc.clone_builtin_to_assembly(
+            db,
+            prompt_name,
+            name=payload.name,
+            description=payload.description,
+        )
+    except UnknownPromptError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
     return PromptAssemblyOut.model_validate(assembly)

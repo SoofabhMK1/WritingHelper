@@ -7,7 +7,7 @@ the current DB after backing it up to a timestamped file).
 from __future__ import annotations
 
 import shutil
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -17,9 +17,35 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.config import settings
-from app.database import Base, engine, get_db
+from app.database import engine, get_db
 
 router = APIRouter(prefix="/backup", tags=["backup"])
+
+
+# Required tables for a valid backup. A file missing any of these (or
+# ``alembic_version``) is rejected to avoid landing on a half-migrated DB.
+REQUIRED_TABLES = frozenset(
+    {
+        "works",
+        "volumes",
+        "chapters",
+        "characters",
+        "protagonist_profiles",
+        "events",
+        "event_characters",
+        "event_links",
+        "character_states",
+        "foreshadowing",
+        "app_settings",
+        "prompt_fragments",
+        "prompt_assemblies",
+        "ai_prompt_assignments",
+        "ai_prompt_template_bindings",
+        "ai_service_profiles",
+        "llm_request_logs",
+        "alembic_version",
+    }
+)
 
 
 def _resolve_db_path() -> Path:
@@ -77,7 +103,7 @@ def download_backup(db: Session = Depends(get_db)):
     return FileResponse(
         path=str(path),
         media_type="application/octet-stream",
-        filename=f"xiaoshuo-backup-{datetime.utcnow().strftime('%Y%m%d-%H%M%S')}.db",
+        filename=f"xiaoshuo-backup-{datetime.now(timezone.utc).strftime('%Y%m%d-%H%M%S')}.db",
     )
 
 
@@ -89,7 +115,7 @@ async def restore_backup(
     """Replace the current database with the uploaded SQLite file.
 
     The current DB is first copied to a timestamped backup. The uploaded
-    file is validated by attempting to open it as a SQLite DB before swap.
+    file is validated by checking required tables exist before swap.
     """
     if file.content_type and file.content_type not in (
         "application/octet-stream",
@@ -106,37 +132,48 @@ async def restore_backup(
     with open(tmp_path, "wb") as f:
         shutil.copyfileobj(file.file, f)
 
-    # validate by attempting to open
+    # validate: must be SQLite AND contain all required tables.
     try:
         import sqlite3
 
         conn = sqlite3.connect(str(tmp_path))
         try:
-            cur = conn.execute("SELECT name FROM sqlite_master WHERE type='table' LIMIT 1")
-            if cur.fetchone() is None:
-                raise ValueError("Uploaded file contains no tables")
+            cur = conn.execute(
+                "SELECT name FROM sqlite_master WHERE type='table'"
+            )
+            present = {row[0] for row in cur.fetchall()}
         finally:
             conn.close()
     except Exception as e:
         tmp_path.unlink(missing_ok=True)
         raise HTTPException(status_code=400, detail=f"Invalid SQLite file: {e}") from e
 
-    # close current session/engine to release file lock
-    _checkpoint(db)
-    engine.dispose()
+    missing = REQUIRED_TABLES - present
+    if missing:
+        tmp_path.unlink(missing_ok=True)
+        raise HTTPException(
+            status_code=400,
+            detail=f"Backup schema incomplete; missing tables: {sorted(missing)}",
+        )
 
-    # backup current file
-    timestamp = datetime.utcnow().strftime("%Y%m%d-%H%M%S")
+    # flush any pending writes, then back up current file before swap.
+    _checkpoint(db)
+    timestamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
     backup_path = current_path.with_suffix(f".backup-{timestamp}.db")
     shutil.copy2(current_path, backup_path)
 
-    # swap
+    # swap files; the engine pool is disposed after the swap so any pooled
+    # connections still see a valid (pre-swap) file at acquire time. New
+    # requests after this point will lazily create connections against the
+    # new file.
     shutil.move(str(tmp_path), str(current_path))
+    engine.dispose()
 
     return {
         "ok": True,
         "backup_file": str(backup_path),
         "restored_to": str(current_path),
+        "restart_recommended": False,
     }
 
 
@@ -159,7 +196,8 @@ def backup_info(db: Session = Depends(get_db)):
 def _human_size(n: int) -> str:
     units = ["B", "KB", "MB", "GB"]
     i = 0
-    while n >= 1024 and i < len(units) - 1:
-        n /= 1024
+    value = float(n)
+    while value >= 1024 and i < len(units) - 1:
+        value /= 1024
         i += 1
-    return f"{n:.1f} {units[i]}"
+    return f"{value:.1f} {units[i]}"

@@ -20,7 +20,7 @@ from __future__ import annotations
 
 import json
 import time
-from typing import Any, Optional
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
@@ -29,16 +29,20 @@ from sqlalchemy.orm import Session
 from app.ai import client as ai_client
 from app.ai import context as ctx
 from app.ai import prompts as ai_prompts
+from app.ai.endpoints import AIEndpoint
 from app.ai.prompts import PROMPTS
 from app.database import get_db
+from app.models.chapter import Chapter
+from app.models.volume import Volume
+from app.models.work import Work
 from app.services import llm_log
-from app.services.ai_prompt_template import resolve_prompt
 from app.services.ai_profiles import (
     get_default_profile,
     list_assignments,
     list_profiles,
     profile_to_summary,
 )
+from app.services.ai_prompt_template import resolve_prompt
 from app.services.prompt_assembly import AssemblyRenderError
 
 router = APIRouter(prefix="/ai", tags=["ai"])
@@ -51,7 +55,7 @@ router = APIRouter(prefix="/ai", tags=["ai"])
 class OutlineRequest(BaseModel):
     work_id: int
     volume_count: int = Field(3, ge=1, le=10)
-    target_words: Optional[int] = None
+    target_words: int | None = None
 
 
 class ChaptersRequest(BaseModel):
@@ -63,13 +67,13 @@ class ChaptersRequest(BaseModel):
 class CharacterRequest(BaseModel):
     work_id: int
     role: str = "support"
-    extra_hint: Optional[str] = None
+    extra_hint: str | None = None
 
 
 class EventRequest(BaseModel):
     work_id: int
     count: int = Field(5, ge=1, le=20)
-    current_summary: Optional[str] = None
+    current_summary: str | None = None
 
 
 class ConsistencyRequest(BaseModel):
@@ -78,7 +82,7 @@ class ConsistencyRequest(BaseModel):
 
 
 class ChatRequest(BaseModel):
-    work_id: Optional[int] = None
+    work_id: int | None = None
     question: str = Field(..., min_length=1)
 
 
@@ -136,8 +140,8 @@ def _call(
     variables: dict[str, Any],
     json_mode: bool = True,
     *,
-    endpoint: str = "",
-    work_id: Optional[int] = None,
+    endpoint: AIEndpoint = AIEndpoint.UNKNOWN,
+    work_id: int | None = None,
 ) -> Any:
     prompt = PROMPTS.get(prompt_name)
     if prompt is None:
@@ -150,6 +154,7 @@ def _call(
         ) from e
     system, user = resolved.system, resolved.user
     cfg = ai_client.resolve_config(db, prompt_name=prompt_name)
+    endpoint_str = endpoint.value if isinstance(endpoint, AIEndpoint) else str(endpoint)
     started = time.monotonic()
     try:
         text = ai_client.chat(
@@ -166,7 +171,7 @@ def _call(
         llm_log.record(
             db,
             prompt_name=prompt_name,
-            endpoint=endpoint,
+            endpoint=endpoint_str,
             system=system,
             user=user,
             status=status,
@@ -184,7 +189,7 @@ def _call(
     llm_log.record(
         db,
         prompt_name=prompt_name,
-        endpoint=endpoint,
+        endpoint=endpoint_str,
         system=system,
         user=user,
         status="ok",
@@ -202,8 +207,6 @@ def _call(
 
 
 def _require_work(db: Session, work_id: int):
-    from app.models.work import Work
-
     work = db.get(Work, work_id)
     if not work:
         raise HTTPException(status_code=404, detail="Work not found")
@@ -230,7 +233,7 @@ def suggest_outline(payload: OutlineRequest, db: Session = Depends(get_db)):
             "target_words": target,
             "volume_count": payload.volume_count,
         },
-        endpoint="/ai/suggest/outline",
+        endpoint=AIEndpoint.OUTLINE,
         work_id=work.id,
     )
     return {"work_id": work.id, "volumes": data.get("volumes", []), "raw": data}
@@ -238,8 +241,6 @@ def suggest_outline(payload: OutlineRequest, db: Session = Depends(get_db)):
 
 @router.post("/suggest/chapters")
 def suggest_chapters(payload: ChaptersRequest, db: Session = Depends(get_db)):
-    from app.models.volume import Volume
-
     work = _require_work(db, payload.work_id)
     vol = db.get(Volume, payload.volume_id)
     if not vol or vol.work_id != work.id:
@@ -253,7 +254,7 @@ def suggest_chapters(payload: ChaptersRequest, db: Session = Depends(get_db)):
             "volume_summary": vol.summary or "(无)",
             "target_chapter_count": payload.target_chapter_count,
         },
-        endpoint="/ai/suggest/chapters",
+        endpoint=AIEndpoint.CHAPTERS,
         work_id=work.id,
     )
     return {"work_id": work.id, "volume_id": vol.id, "chapters": data.get("chapters", []), "raw": data}
@@ -271,7 +272,7 @@ def suggest_character(payload: CharacterRequest, db: Session = Depends(get_db)):
             "role": payload.role,
             "existing_chars": ctx.characters_summary(db, work.id),
         },
-        endpoint="/ai/suggest/character",
+        endpoint=AIEndpoint.CHARACTER,
         work_id=work.id,
     )
     return {"work_id": work.id, "character": data.get("character", data), "raw": data}
@@ -290,7 +291,7 @@ def suggest_event(payload: EventRequest, db: Session = Depends(get_db)):
             "existing_events": ctx.events_summary(db, work.id),
             "count": payload.count,
         },
-        endpoint="/ai/suggest/event",
+        endpoint=AIEndpoint.EVENT,
         work_id=work.id,
     )
     return {"work_id": work.id, "events": data.get("events", []), "raw": data}
@@ -307,7 +308,7 @@ def check_consistency(payload: ConsistencyRequest, db: Session = Depends(get_db)
             "settings_summary": settings_summary,
             "new_content": payload.new_content,
         },
-        endpoint="/ai/check/consistency",
+        endpoint=AIEndpoint.CONSISTENCY,
         work_id=work.id,
     )
     return {"work_id": work.id, "issues": data.get("issues", []), "summary": data.get("summary", ""), "raw": data}
@@ -320,65 +321,15 @@ def free_chat(payload: ChatRequest, db: Session = Depends(get_db)):
         context_text = ctx.full_context(db, payload.work_id)
     else:
         context_text = "(未载入作品上下文)"
-    try:
-        resolved = resolve_prompt(
-            db,
-            "chat",
-            {"context": context_text, "question": payload.question},
-        )
-    except AssemblyRenderError as e:
-        raise HTTPException(
-            status_code=422, detail={"code": e.code, "message": e.message}
-        ) from e
-    system, user = resolved.system, resolved.user
-    cfg = ai_client.resolve_config(db, prompt_name="chat")
-    started = time.monotonic()
-    try:
-        text = ai_client.chat(
-            db,
-            system=system,
-            user=user,
-            json_mode=False,
-            prompt_name="chat",
-            cfg=cfg,
-        )
-    except ai_client.AIServiceError as e:
-        duration_ms = int((time.monotonic() - started) * 1000)
-        status = "not_configured" if e.code == "not_configured" else "error"
-        llm_log.record(
-            db,
-            prompt_name="chat",
-            endpoint="/ai/chat",
-            system=system,
-            user=user,
-            status=status,
-            error=str(e),
-            duration_ms=duration_ms,
-            work_id=payload.work_id,
-            profile_id=cfg.profile_id,
-            provider=cfg.provider,
-            model=cfg.model,
-            prompt_assembly_id=resolved.assembly_id,
-        )
-        code = 503 if e.code == "not_configured" else 502
-        raise HTTPException(status_code=code, detail=str(e)) from e
-    duration_ms = int((time.monotonic() - started) * 1000)
-    llm_log.record(
+    answer = _call(
         db,
-        prompt_name="chat",
-        endpoint="/ai/chat",
-        system=system,
-        user=user,
-        status="ok",
-        response=text,
-        duration_ms=duration_ms,
+        "chat",
+        {"context": context_text, "question": payload.question},
+        json_mode=False,
+        endpoint=AIEndpoint.CHAT,
         work_id=payload.work_id,
-        profile_id=cfg.profile_id,
-        provider=cfg.provider,
-        model=cfg.model,
-        prompt_assembly_id=resolved.assembly_id,
     )
-    return {"answer": text}
+    return {"answer": answer}
 
 
 @router.get("/status")
@@ -430,8 +381,6 @@ def get_prompt_template(name: str):
 
 @router.post("/suggest/continue")
 def suggest_continue(payload: ContinueRequest, db: Session = Depends(get_db)):
-    from app.models.chapter import Chapter
-
     work = _require_work(db, payload.work_id)
     ch = db.get(Chapter, payload.chapter_id)
     if not ch or ch.work_id != work.id:
@@ -464,7 +413,7 @@ def suggest_continue(payload: ContinueRequest, db: Session = Depends(get_db)):
             "target_chars": payload.target_chars,
         },
         json_mode=False,
-        endpoint="/ai/suggest/continue",
+        endpoint=AIEndpoint.CONTINUE,
         work_id=work.id,
     )
     # plain text response — extract from prompt return
@@ -485,7 +434,7 @@ def suggest_expand(payload: ExpandRequest, db: Session = Depends(get_db)):
             "target_chars": payload.target_chars,
         },
         json_mode=False,
-        endpoint="/ai/suggest/expand",
+        endpoint=AIEndpoint.EXPAND,
         work_id=work.id,
     )
     return {"work_id": work.id, "text": data}

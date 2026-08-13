@@ -1,4 +1,3 @@
-from typing import Optional
 
 from sqlalchemy import Index, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
@@ -19,7 +18,6 @@ class PromptFragment(Base, TimestampMixin):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     name: Mapped[str] = mapped_column(String(120), nullable=False)
     body: Mapped[str] = mapped_column(Text, nullable=False, default="")
-    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    tags_json: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     __table_args__ = (Index("ix_prompt_fragments_name", "name"),)

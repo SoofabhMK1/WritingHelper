@@ -1,6 +1,5 @@
-from typing import Optional
 
-from sqlalchemy import ForeignKey, Integer, String
+from sqlalchemy import ForeignKey, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base, TimestampMixin
@@ -19,7 +18,7 @@ class AIPromptTemplateBinding(Base, TimestampMixin):
     __tablename__ = "ai_prompt_template_bindings"
 
     prompt_name: Mapped[str] = mapped_column(String(40), primary_key=True)
-    assembly_id: Mapped[Optional[int]] = mapped_column(
+    assembly_id: Mapped[int | None] = mapped_column(
         ForeignKey("prompt_assemblies.id", ondelete="SET NULL"),
         nullable=True,
     )

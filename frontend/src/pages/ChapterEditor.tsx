@@ -138,7 +138,14 @@ export function ChapterEditor() {
   if (!chapter) return <Typography.Text type="secondary">章节不存在</Typography.Text>;
 
   async function onSave(_html: string, plainText: string) {
-    const values = await form.validateFields();
+    let values;
+    try {
+      values = await form.validateFields();
+    } catch (err) {
+      // Surface validation error so the user knows to fix the side panel.
+      message.warning("请先在右侧填写完整的章节属性（标题、字数等）");
+      throw err;
+    }
     await update(
       {
         id: chapterId,
@@ -149,7 +156,10 @@ export function ChapterEditor() {
       },
       {
         onSuccess: () => message.success("已保存", 0.8),
-        onError: (e: Error) => message.error(`保存失败: ${e.message}`),
+        onError: (e: Error) => {
+          message.error(`保存失败: ${e.message}`);
+          throw e;
+        },
       },
     );
   }
@@ -261,6 +271,7 @@ export function ChapterEditor() {
                   type="primary"
                   icon={<SaveOutlined />}
                   loading={isPending}
+                  disabled={isPending}
                   onClick={async () => {
                     const v = await form.validateFields();
                     update(

@@ -7,6 +7,7 @@ import "antd/dist/reset.css";
 import "./index.css";
 
 import { App } from "./App";
+import { ErrorBoundary } from "./components/ErrorBoundary";
 import { useUiStore } from "./store/theme";
 
 const queryClient = new QueryClient({
@@ -30,11 +31,18 @@ function ThemedApp() {
       }}
     >
       <div data-theme={mode} style={{ minHeight: "100vh" }}>
-        <App />
+        <ErrorBoundary>
+          <App />
+        </ErrorBoundary>
       </div>
     </ConfigProvider>
   );
 }
+
+window.addEventListener("unhandledrejection", (event) => {
+  // eslint-disable-next-line no-console
+  console.error("[unhandledrejection]", event.reason);
+});
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>

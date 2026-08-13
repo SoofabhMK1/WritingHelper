@@ -12,22 +12,22 @@ a prompt name + variables dict.
 from __future__ import annotations
 
 import json
-from typing import Any, Dict, Optional
+from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.ai.prompts import PROMPTS, Prompt, render as render_builtin
+from app.ai.prompts import PROMPTS, Prompt
+from app.ai.prompts import render as render_builtin
 from app.models.ai_prompt_template_binding import AIPromptTemplateBinding
 from app.models.prompt_assembly import PromptAssembly
 from app.services.prompt_assembly import render_assembly
-
 
 # ============================================================================
 # CRUD
 # ============================================================================
 
-def list_bindings(db: Session) -> Dict[str, Optional[int]]:
+def list_bindings(db: Session) -> dict[str, int | None]:
     """Return ``{prompt_name: assembly_id | None}`` for every binding row."""
     rows = db.scalars(select(AIPromptTemplateBinding)).all()
     return {r.prompt_name: r.assembly_id for r in rows}
@@ -35,14 +35,14 @@ def list_bindings(db: Session) -> Dict[str, Optional[int]]:
 
 def get_binding(
     db: Session, prompt_name: str
-) -> Optional[AIPromptTemplateBinding]:
+) -> AIPromptTemplateBinding | None:
     return db.get(AIPromptTemplateBinding, prompt_name)
 
 
 def set_binding(
     db: Session,
     prompt_name: str,
-    assembly_id: Optional[int],
+    assembly_id: int | None,
 ) -> AIPromptTemplateBinding:
     """Upsert the binding for ``prompt_name``.
 
@@ -50,17 +50,9 @@ def set_binding(
     to the built-in template.
     """
     if prompt_name not in PROMPTS:
-        from fastapi import HTTPException
-
-        raise HTTPException(
-            status_code=400, detail=f"Unknown prompt: {prompt_name}"
-        )
+        raise UnknownPromptError(prompt_name)
     if assembly_id is not None and db.get(PromptAssembly, assembly_id) is None:
-        from fastapi import HTTPException
-
-        raise HTTPException(
-            status_code=400, detail=f"Unknown assembly: {assembly_id}"
-        )
+        raise UnknownAssemblyError(assembly_id)
     row = db.get(AIPromptTemplateBinding, prompt_name)
     if row is None:
         row = AIPromptTemplateBinding(
@@ -92,7 +84,7 @@ def clone_builtin_to_assembly(
     prompt_name: str,
     *,
     name: str,
-    description: Optional[str] = None,
+    description: str | None = None,
 ) -> PromptAssembly:
     """Create a new :class:`PromptAssembly` seeded from the built-in body.
 
@@ -101,11 +93,7 @@ def clone_builtin_to_assembly(
     verbatim.
     """
     if prompt_name not in PROMPTS:
-        from fastapi import HTTPException
-
-        raise HTTPException(
-            status_code=404, detail=f"Unknown prompt: {prompt_name}"
-        )
+        raise UnknownPromptError(prompt_name)
     p: Prompt = PROMPTS[prompt_name]
     system_parts = [{"type": "text", "body": p.system}]
     user_parts = [{"type": "text", "body": p.user_template}]
@@ -123,6 +111,32 @@ def clone_builtin_to_assembly(
 
 
 # ============================================================================
+# Domain exceptions
+# ============================================================================
+
+class UnknownPromptError(KeyError):
+    """A prompt name isn't registered in ``app.ai.prompts.PROMPTS``."""
+
+    def __init__(self, prompt_name: str):
+        super().__init__(prompt_name)
+        self.prompt_name = prompt_name
+
+    def __str__(self) -> str:  # KeyError uses args[0] in repr; override for cleaner logs
+        return f"Unknown prompt: {self.prompt_name}"
+
+
+class UnknownAssemblyError(ValueError):
+    """An assembly_id was supplied that doesn't exist."""
+
+    def __init__(self, assembly_id: int):
+        super().__init__(assembly_id)
+        self.assembly_id = assembly_id
+
+    def __str__(self) -> str:
+        return f"Unknown assembly: {self.assembly_id}"
+
+
+# ============================================================================
 # Resolve at request time
 # ============================================================================
 
@@ -136,7 +150,7 @@ class ResolvedPrompt:
         *,
         system: str,
         user: str,
-        assembly_id: Optional[int],
+        assembly_id: int | None,
         builtin_name: str,
     ):
         self.system = system
@@ -148,7 +162,7 @@ class ResolvedPrompt:
 def resolve_prompt(
     db: Session,
     prompt_name: str,
-    variables: Dict[str, Any],
+    variables: dict[str, Any],
 ) -> ResolvedPrompt:
     """Return the rendered ``(system, user)`` for ``prompt_name``.
 

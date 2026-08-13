@@ -1,20 +1,19 @@
 from datetime import datetime
-from typing import Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
 
 class WorkBase(BaseModel):
     title: str = Field(..., min_length=1, max_length=200)
-    subtitle: Optional[str] = Field(None, max_length=200)
-    genre: Optional[str] = Field(None, max_length=80)
-    style: Optional[str] = Field(None, max_length=80)
-    pov: Optional[str] = Field(None, max_length=40)
-    description: Optional[str] = None
+    subtitle: str | None = Field(None, max_length=200)
+    genre: str | None = Field(None, max_length=80)
+    style: str | None = Field(None, max_length=80)
+    pov: str | None = Field(None, max_length=40)
+    description: str | None = None
     target_words: int = Field(0, ge=0)
     status: str = "draft"
-    cover: Optional[str] = None
-    notes: Optional[str] = None
+    cover: str | None = None
+    notes: str | None = None
 
 
 class WorkCreate(WorkBase):
@@ -22,17 +21,17 @@ class WorkCreate(WorkBase):
 
 
 class WorkUpdate(BaseModel):
-    title: Optional[str] = Field(None, min_length=1, max_length=200)
-    subtitle: Optional[str] = Field(None, max_length=200)
-    genre: Optional[str] = Field(None, max_length=80)
-    style: Optional[str] = Field(None, max_length=80)
-    pov: Optional[str] = Field(None, max_length=40)
-    description: Optional[str] = None
-    target_words: Optional[int] = Field(None, ge=0)
-    current_words: Optional[int] = Field(None, ge=0)
-    status: Optional[str] = None
-    cover: Optional[str] = None
-    notes: Optional[str] = None
+    title: str | None = Field(None, min_length=1, max_length=200)
+    subtitle: str | None = Field(None, max_length=200)
+    genre: str | None = Field(None, max_length=80)
+    style: str | None = Field(None, max_length=80)
+    pov: str | None = Field(None, max_length=40)
+    description: str | None = None
+    target_words: int | None = Field(None, ge=0)
+    current_words: int | None = Field(None, ge=0)
+    status: str | None = None
+    cover: str | None = None
+    notes: str | None = None
 
 
 class WorkOut(WorkBase):

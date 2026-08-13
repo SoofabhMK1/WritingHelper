@@ -6,7 +6,7 @@ two part lists (system / user) and produces a `(system_str, user_str)` tuple.
 from __future__ import annotations
 
 import json
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from pydantic import TypeAdapter
 from sqlalchemy import select
@@ -22,9 +22,8 @@ from app.schemas.prompt_assembly import (
 )
 from app.services import prompt_fragment as fragment_service
 
-
-_part_adapter: TypeAdapter[List[Part]] = TypeAdapter(List[Part])
-_sample_adapter: TypeAdapter[Dict[str, Any]] = TypeAdapter(Dict[str, Any])
+_part_adapter: TypeAdapter[list[Part]] = TypeAdapter(list[Part])
+_sample_adapter: TypeAdapter[dict[str, Any]] = TypeAdapter(dict[str, Any])
 
 # Separator between rendered parts — markdown paragraph break.
 _SEPARATOR = "\n\n"
@@ -37,19 +36,19 @@ class _SoftVars(dict):
     text, and builtin slots never raises on missing keys.
     """
 
-    def __missing__(self, key: str) -> str:  # type: ignore[override]
+    def __missing__(self, key: str) -> str:
         return ""
 
     def __getitem__(self, key: str) -> str:
         val = super().get(key, "")
         return "" if val is None else val
 
-    def get(self, key: str, default: Any = "") -> str:  # type: ignore[override]
+    def get(self, key: str, default: Any = "") -> str:
         val = super().get(key, default)
         return "" if val is None else val
 
 
-def _soft_format(text: str, variables: Dict[str, Any]) -> str:
+def _soft_format(text: str, variables: dict[str, Any]) -> str:
     return text.format_map(_SoftVars(variables))
 
 
@@ -57,7 +56,7 @@ def _soft_format(text: str, variables: Dict[str, Any]) -> str:
 # JSON <-> typed-list helpers
 # ============================================================================
 
-def _encode_parts(parts: Optional[List[Any]]) -> str:
+def _encode_parts(parts: list[Any] | None) -> str:
     """Serialize a list of Part dataclass instances or plain dicts.
 
     Accepts dicts so callers coming from `model_dump(exclude_unset=True)`
@@ -74,19 +73,19 @@ def _encode_parts(parts: Optional[List[Any]]) -> str:
     return json.dumps(out, ensure_ascii=False)
 
 
-def _decode_parts(raw: str) -> List[Part]:
+def _decode_parts(raw: str) -> list[Part]:
     if not raw:
         return []
     return _part_adapter.validate_json(raw)
 
 
-def _encode_sample(sample: Optional[Dict[str, Any]]) -> str:
+def _encode_sample(sample: dict[str, Any] | None) -> str:
     if sample is None:
         return "{}"
     return json.dumps(sample, ensure_ascii=False)
 
 
-def _decode_sample(raw: str) -> Dict[str, Any]:
+def _decode_sample(raw: str) -> dict[str, Any]:
     if not raw:
         return {}
     return _sample_adapter.validate_json(raw)
@@ -97,8 +96,8 @@ def _decode_sample(raw: str) -> Dict[str, Any]:
 # ============================================================================
 
 def list_assemblies(
-    db: Session, q: Optional[str] = None
-) -> List[PromptAssembly]:
+    db: Session, q: str | None = None
+) -> list[PromptAssembly]:
     stmt = select(PromptAssembly)
     if q:
         like = f"%{q}%"
@@ -109,7 +108,7 @@ def list_assemblies(
 
 def get_assembly(
     db: Session, assembly_id: int
-) -> Optional[PromptAssembly]:
+) -> PromptAssembly | None:
     return db.get(PromptAssembly, assembly_id)
 
 
@@ -131,7 +130,7 @@ def create_assembly(
 
 def update_assembly(
     db: Session, assembly_id: int, payload: PromptAssemblyUpdate
-) -> Optional[PromptAssembly]:
+) -> PromptAssembly | None:
     row = db.get(PromptAssembly, assembly_id)
     if row is None:
         return None
@@ -170,12 +169,13 @@ class AssemblyRenderError(ValueError):
     def __init__(self, code: str, message: str):
         super().__init__(message)
         self.code = code
+        self.message = message
 
 
 def _render_part_list(
-    parts: List[Part],
-    fragments_map: Dict[int, Any],
-    variables: Dict[str, Any],
+    parts: list[Part],
+    fragments_map: dict[int, Any],
+    variables: dict[str, Any],
 ) -> str:
     """Walk a part list, return the joined string.
 
@@ -183,7 +183,7 @@ def _render_part_list(
     `{variable}` placeholders substituted with `variables`; missing keys
     and `None` values resolve to empty string.
     """
-    chunks: List[str] = []
+    chunks: list[str] = []
     for idx, part in enumerate(parts):
         # The discriminated union type is erased at runtime — branch on `type`.
         if part.type == "fragment":
@@ -228,7 +228,7 @@ def _render_part_list(
 def render_assembly(
     db: Session,
     assembly: PromptAssembly,
-    variables: Optional[Dict[str, Any]] = None,
+    variables: dict[str, Any] | None = None,
 ) -> AssemblyRenderResult:
     """Render an assembly to (system, user) using the supplied variables.
 

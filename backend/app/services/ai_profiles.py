@@ -19,14 +19,13 @@ Lookup order at request time (see :func:`resolve_profile`):
 """
 from __future__ import annotations
 
-from typing import Optional
-
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.ai.prompts import PROMPTS
 from app.models.ai_prompt_assignment import AIPromptAssignment
 from app.models.ai_service_profile import AIServiceProfile
+from app.schemas.ai_profile import AIProfileOut, AIProfileSummary
 from app.services.settings import (
     KEY_API_KEY,
     KEY_BASE_URL,
@@ -35,7 +34,6 @@ from app.services.settings import (
     delete_setting,
     get_setting,
 )
-
 
 LEGACY_DEFAULT_NAME = "迁移自旧配置"
 
@@ -55,11 +53,11 @@ def list_profiles(db: Session) -> list[AIServiceProfile]:
     )
 
 
-def get_profile(db: Session, profile_id: int) -> Optional[AIServiceProfile]:
+def get_profile(db: Session, profile_id: int) -> AIServiceProfile | None:
     return db.get(AIServiceProfile, profile_id)
 
 
-def get_profile_by_name(db: Session, name: str) -> Optional[AIServiceProfile]:
+def get_profile_by_name(db: Session, name: str) -> AIServiceProfile | None:
     return db.scalars(
         select(AIServiceProfile).where(AIServiceProfile.name == name).limit(1)
     ).first()
@@ -68,12 +66,26 @@ def get_profile_by_name(db: Session, name: str) -> Optional[AIServiceProfile]:
 def _ensure_single_default(
     db: Session,
     *,
-    new_default_id: Optional[int],
+    new_default_id: int | None,
 ) -> None:
-    """Set exactly one profile to ``True``. ``None`` clears all."""
-    rows = db.scalars(select(AIServiceProfile)).all()
-    for row in rows:
-        row.is_default = row.id == new_default_id
+    """Set exactly one profile to ``True``. ``None`` clears all.
+
+    Uses two bulk ``UPDATE`` statements instead of loading every row into
+    Python; for large profile tables this avoids an O(N) round-trip per
+    write.
+    """
+    from sqlalchemy import update
+
+    # Clear every is_default flag, then set the new one (if any). Order
+    # matters: we don't want a transient moment where two rows claim
+    # ``is_default=True``.
+    db.execute(update(AIServiceProfile).values(is_default=False))
+    if new_default_id is not None:
+        db.execute(
+            update(AIServiceProfile)
+            .where(AIServiceProfile.id == new_default_id)
+            .values(is_default=True)
+        )
 
 
 def create_profile(
@@ -84,7 +96,7 @@ def create_profile(
     base_url: str,
     model: str,
     temperature: float,
-    api_key: Optional[str] = None,
+    api_key: str | None = None,
     is_default: bool = False,
 ) -> AIServiceProfile:
     profile = AIServiceProfile(
@@ -110,14 +122,14 @@ def update_profile(
     db: Session,
     profile_id: int,
     *,
-    name: Optional[str] = None,
-    provider: Optional[str] = None,
-    base_url: Optional[str] = None,
-    model: Optional[str] = None,
-    temperature: Optional[float] = None,
-    api_key: Optional[str] = None,
-    is_default: Optional[bool] = None,
-) -> Optional[AIServiceProfile]:
+    name: str | None = None,
+    provider: str | None = None,
+    base_url: str | None = None,
+    model: str | None = None,
+    temperature: float | None = None,
+    api_key: str | None = None,
+    is_default: bool | None = None,
+) -> AIServiceProfile | None:
     """Partial update. ``api_key=""`` clears; ``None`` leaves alone."""
     profile = db.get(AIServiceProfile, profile_id)
     if profile is None:
@@ -136,6 +148,19 @@ def update_profile(
         profile.api_key = api_key
     if is_default is True:
         _ensure_single_default(db, new_default_id=profile.id)
+    elif is_default is False and profile.is_default:
+        # explicitly demoting the current default — must promote another profile,
+        # otherwise the invariant "exactly one default" would be violated.
+        total = db.scalar(select(func.count(AIServiceProfile.id))) or 0
+        if total <= 1:
+            raise ValueError("必须保留一个默认 profile；请先新建另一个 profile")
+        successor = db.scalars(
+            select(AIServiceProfile)
+            .where(AIServiceProfile.id != profile.id)
+            .order_by(AIServiceProfile.id.asc())
+            .limit(1)
+        ).first()
+        _ensure_single_default(db, new_default_id=successor.id if successor else None)
     db.commit()
     db.refresh(profile)
     return profile
@@ -161,7 +186,7 @@ def delete_profile(db: Session, profile_id: int) -> bool:
     return True
 
 
-def set_default(db: Session, profile_id: int) -> Optional[AIServiceProfile]:
+def set_default(db: Session, profile_id: int) -> AIServiceProfile | None:
     profile = db.get(AIServiceProfile, profile_id)
     if profile is None:
         return None
@@ -171,7 +196,7 @@ def set_default(db: Session, profile_id: int) -> Optional[AIServiceProfile]:
     return profile
 
 
-def get_default_profile(db: Session) -> Optional[AIServiceProfile]:
+def get_default_profile(db: Session) -> AIServiceProfile | None:
     return db.scalars(
         select(AIServiceProfile)
         .where(AIServiceProfile.is_default.is_(True))
@@ -183,7 +208,7 @@ def get_default_profile(db: Session) -> Optional[AIServiceProfile]:
 # Assignments
 # --------------------------------------------------------------------------
 
-def list_assignments(db: Session) -> dict[str, Optional[int]]:
+def list_assignments(db: Session) -> dict[str, int | None]:
     rows = db.scalars(select(AIPromptAssignment)).all()
     return {row.prompt_name: row.profile_id for row in rows}
 
@@ -191,7 +216,7 @@ def list_assignments(db: Session) -> dict[str, Optional[int]]:
 def set_assignment(
     db: Session,
     prompt_name: str,
-    profile_id: Optional[int],
+    profile_id: int | None,
 ) -> AIPromptAssignment:
     if prompt_name not in PROMPTS:
         raise ValueError(f"Unknown prompt: {prompt_name}")
@@ -223,9 +248,19 @@ def delete_assignment(db: Session, prompt_name: str) -> bool:
 
 def resolve_profile(
     db: Session,
-    prompt_name: Optional[str] = None,
-) -> Optional[AIServiceProfile]:
-    """Pick the profile that should serve ``prompt_name``."""
+    prompt_name: str | None = None,
+) -> AIServiceProfile | None:
+    """Pick the profile that should serve ``prompt_name``.
+
+    Resolution order:
+
+    1. explicit ``ai_prompt_assignments[prompt_name]``
+    2. the ``is_default=True`` profile
+    3. (fallback) run the one-shot legacy ``app_settings`` migration if no
+       profiles exist yet. This is idempotent and normally already
+       handled by the startup hook in :mod:`app.main`; kept here so
+       tests that bypass startup still get the right answer.
+    """
     if prompt_name:
         assignment = db.get(AIPromptAssignment, prompt_name)
         if assignment and assignment.profile_id is not None:
@@ -242,7 +277,7 @@ def resolve_profile(
     return None
 
 
-def _maybe_migrate_legacy(db: Session) -> Optional[AIServiceProfile]:
+def _maybe_migrate_legacy(db: Session) -> AIServiceProfile | None:
     """First-run migration: lift ``app_settings`` ai.* keys into a profile.
 
     Runs only when the profiles table is empty AND at least one legacy
@@ -279,31 +314,49 @@ def _maybe_migrate_legacy(db: Session) -> Optional[AIServiceProfile]:
     return profile
 
 
+def ensure_legacy_migrated(db: Session) -> AIServiceProfile | None:
+    """Run the one-shot legacy migration eagerly.
+
+    Intended to be called once at app startup (see :mod:`app.main`) so
+    that ``resolve_profile`` / ``resolve_config`` can stay read-only on
+    the hot path. Idempotent: returns ``None`` when there is nothing to
+    migrate.
+    """
+    if db.scalar(select(func.count(AIServiceProfile.id))) > 0:
+        return None
+    return _maybe_migrate_legacy(db)
+
+
 # --------------------------------------------------------------------------
 # Output shaping
 # --------------------------------------------------------------------------
 
-def profile_to_summary(profile: AIServiceProfile) -> dict:
-    return {
-        "id": profile.id,
-        "name": profile.name,
-        "provider": profile.provider,
-        "model": profile.model,
-        "is_default": profile.is_default,
-        "has_api_key": bool(profile.api_key),
-    }
+def profile_to_summary(profile: AIServiceProfile) -> AIProfileSummary:
+    return AIProfileSummary.model_validate(
+        {
+            "id": profile.id,
+            "name": profile.name,
+            "provider": profile.provider,
+            "model": profile.model,
+            "is_default": profile.is_default,
+            "has_api_key": bool(profile.api_key),
+        }
+    )
 
 
-def profile_to_out(profile: AIServiceProfile) -> dict:
-    return {
-        "id": profile.id,
-        "name": profile.name,
-        "provider": profile.provider,
-        "base_url": profile.base_url,
-        "model": profile.model,
-        "temperature": profile.temperature,
-        "is_default": profile.is_default,
-        "has_api_key": bool(profile.api_key),
-        "created_at": profile.created_at.isoformat() if profile.created_at else None,
-        "updated_at": profile.updated_at.isoformat() if profile.updated_at else None,
-    }
+def profile_to_out(profile: AIServiceProfile) -> AIProfileOut:
+    # has_api_key is a derived field on the ORM, so build the dict explicitly.
+    return AIProfileOut.model_validate(
+        {
+            "id": profile.id,
+            "name": profile.name,
+            "provider": profile.provider,
+            "base_url": profile.base_url,
+            "model": profile.model,
+            "temperature": profile.temperature,
+            "is_default": profile.is_default,
+            "has_api_key": bool(profile.api_key),
+            "created_at": profile.created_at,
+            "updated_at": profile.updated_at,
+        }
+    )

@@ -1,27 +1,19 @@
-from typing import List
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.api.v1.deps import get_scoped_or_404, get_work_or_404
 from app.database import get_db
 from app.models.volume import Volume
-from app.models.work import Work
 from app.schemas.volume import VolumeCreate, VolumeOut, VolumeUpdate
 
 router = APIRouter(prefix="/works/{work_id}/volumes", tags=["volumes"])
 
 
-def _get_work_or_404(work_id: int, db: Session) -> Work:
-    work = db.get(Work, work_id)
-    if not work:
-        raise HTTPException(status_code=404, detail="Work not found")
-    return work
-
-
-@router.get("", response_model=List[VolumeOut])
+@router.get("", response_model=list[VolumeOut])
 def list_volumes(work_id: int, db: Session = Depends(get_db)):
-    _get_work_or_404(work_id, db)
+    get_work_or_404(db, work_id)
     stmt = (
         select(Volume)
         .where(Volume.work_id == work_id)
@@ -36,7 +28,7 @@ def create_volume(
     payload: VolumeCreate,
     db: Session = Depends(get_db),
 ):
-    _get_work_or_404(work_id, db)
+    get_work_or_404(db, work_id)
     vol = Volume(work_id=work_id, **payload.model_dump())
     db.add(vol)
     db.commit()
@@ -46,10 +38,9 @@ def create_volume(
 
 @router.get("/{volume_id}", response_model=VolumeOut)
 def get_volume(work_id: int, volume_id: int, db: Session = Depends(get_db)):
-    vol = db.get(Volume, volume_id)
-    if not vol or vol.work_id != work_id:
-        raise HTTPException(status_code=404, detail="Volume not found")
-    return vol
+    return get_scoped_or_404(
+        db, model=Volume, work_id=work_id, child_id=volume_id, label="Volume"
+    )
 
 
 @router.put("/{volume_id}", response_model=VolumeOut)
@@ -59,9 +50,9 @@ def update_volume(
     payload: VolumeUpdate,
     db: Session = Depends(get_db),
 ):
-    vol = db.get(Volume, volume_id)
-    if not vol or vol.work_id != work_id:
-        raise HTTPException(status_code=404, detail="Volume not found")
+    vol = get_scoped_or_404(
+        db, model=Volume, work_id=work_id, child_id=volume_id, label="Volume"
+    )
     for key, value in payload.model_dump(exclude_unset=True).items():
         setattr(vol, key, value)
     db.commit()
@@ -71,9 +62,9 @@ def update_volume(
 
 @router.delete("/{volume_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_volume(work_id: int, volume_id: int, db: Session = Depends(get_db)):
-    vol = db.get(Volume, volume_id)
-    if not vol or vol.work_id != work_id:
-        raise HTTPException(status_code=404, detail="Volume not found")
+    vol = get_scoped_or_404(
+        db, model=Volume, work_id=work_id, child_id=volume_id, label="Volume"
+    )
     db.delete(vol)
     db.commit()
     return None

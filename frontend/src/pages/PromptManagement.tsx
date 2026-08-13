@@ -1,3 +1,4 @@
+import type { CSSProperties } from "react";
 import { useMemo, useState } from "react";
 import {
   Alert,
@@ -50,7 +51,7 @@ function isTabKey(s: string | null): s is TabKey {
   return !!s && (TAB_KEYS as readonly string[]).includes(s);
 }
 
-const preStyle: React.CSSProperties = {
+const preStyle: CSSProperties = {
   whiteSpace: "pre-wrap",
   wordBreak: "break-word",
   fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
@@ -196,7 +197,6 @@ function CloneBuiltinModal({
         >
           <Input
             placeholder={`例如:${promptName ? PROMPT_LABELS[promptName] : "我的模板"}`}
-            autoFocus
           />
         </Form.Item>
         <Form.Item name="description" label="备注(可选)">

@@ -1,4 +1,3 @@
-from typing import Optional
 
 from sqlalchemy import ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -25,17 +24,17 @@ class ProtagonistProfile(Base, TimestampMixin):
         unique=True,
         index=True,
     )
-    core_conflict: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    external_goal: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    internal_goal: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    ghost: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    wound: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    lie_believed: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    truth_needed: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    arc_summary: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    key_relationships: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    special_abilities: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    pov_label: Mapped[Optional[str]] = mapped_column(String(40), nullable=True)
+    core_conflict: Mapped[str | None] = mapped_column(Text, nullable=True)
+    external_goal: Mapped[str | None] = mapped_column(Text, nullable=True)
+    internal_goal: Mapped[str | None] = mapped_column(Text, nullable=True)
+    ghost: Mapped[str | None] = mapped_column(Text, nullable=True)
+    wound: Mapped[str | None] = mapped_column(Text, nullable=True)
+    lie_believed: Mapped[str | None] = mapped_column(Text, nullable=True)
+    truth_needed: Mapped[str | None] = mapped_column(Text, nullable=True)
+    arc_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
+    key_relationships: Mapped[str | None] = mapped_column(Text, nullable=True)
+    special_abilities: Mapped[str | None] = mapped_column(Text, nullable=True)
+    pov_label: Mapped[str | None] = mapped_column(String(40), nullable=True)
 
     character: Mapped["Character"] = relationship(  # noqa: F821
         back_populates="protagonist_profile"

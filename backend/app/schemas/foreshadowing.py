@@ -1,16 +1,15 @@
 from datetime import datetime
-from typing import Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
 
 class ForeshadowBase(BaseModel):
     title: str = Field(..., min_length=1, max_length=200)
-    description: Optional[str] = None
-    quote: Optional[str] = None
-    chapter_id: Optional[int] = None
-    planted_chapter_id: Optional[int] = None
-    payoff_chapter_id: Optional[int] = None
+    description: str | None = None
+    quote: str | None = None
+    chapter_id: int | None = None
+    planted_chapter_id: int | None = None
+    payoff_chapter_id: int | None = None
     status: str = "open"
 
 
@@ -19,13 +18,13 @@ class ForeshadowCreate(ForeshadowBase):
 
 
 class ForeshadowUpdate(BaseModel):
-    title: Optional[str] = Field(None, min_length=1, max_length=200)
-    description: Optional[str] = None
-    quote: Optional[str] = None
-    chapter_id: Optional[int] = None
-    planted_chapter_id: Optional[int] = None
-    payoff_chapter_id: Optional[int] = None
-    status: Optional[str] = None
+    title: str | None = Field(None, min_length=1, max_length=200)
+    description: str | None = None
+    quote: str | None = None
+    chapter_id: int | None = None
+    planted_chapter_id: int | None = None
+    payoff_chapter_id: int | None = None
+    status: str | None = None
 
 
 class ForeshadowOut(ForeshadowBase):

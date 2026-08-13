@@ -201,14 +201,21 @@ def test_strips_json_fence(mock_chat, client, work_id):
     assert r.json()["volumes"][0]["title"] == "第一卷"
 
 
-def test_not_configured_returns_503(client, work_id):
+@patch("app.ai.client.chat")
+def test_not_configured_returns_503(mock_chat, client, work_id):
     """Without an api key (no env, no settings) all AI calls should 503."""
+    from app.ai.client import AIServiceError
+
+    mock_chat.side_effect = AIServiceError("not set", code="not_configured")
     r = client.post(
         "/api/v1/ai/suggest/outline",
         json={"work_id": work_id, "volume_count": 2},
     )
-    # 503 if API key is missing, otherwise the call may succeed if a real key is set
-    assert r.status_code in (200, 503)  # OK to have a real key in env
+    assert r.status_code == 503
+
+    logs = client.get("/api/v1/ai-logs", params={"status": "not_configured"}).json()["items"]
+    assert len(logs) == 1
+    assert logs[0]["status"] == "not_configured"
 
 
 def test_work_not_found(client):

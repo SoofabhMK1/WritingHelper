@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 
 export type ShortcutHandler = () => void;
 
@@ -15,8 +15,19 @@ interface Binding {
 /**
  * Register global keyboard shortcuts. Skips when focus is in input/textarea
  * unless `ctrl` / `meta` is held.
+ *
+ * The `bindings` argument is read via a ref so the keydown listener is bound
+ * exactly once per component lifetime — callers don't have to memoize the
+ * array, which otherwise would cause add/removeEventListener on every render.
  */
 export function useShortcuts(bindings: Binding[]) {
+  const bindingsRef = useRef(bindings);
+  // Keep the ref fresh on every render so the effect (registered once)
+  // always reads the latest bindings. This is the standard "latest ref"
+  // pattern; the lint rule is a false positive here.
+  // eslint-disable-next-line react-hooks/refs
+  bindingsRef.current = bindings;
+
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
       const target = e.target as HTMLElement | null;
@@ -26,7 +37,8 @@ export function useShortcuts(bindings: Binding[]) {
           target.tagName === "TEXTAREA" ||
           target.isContentEditable);
 
-      for (const b of bindings) {
+      const current = bindingsRef.current;
+      for (const b of current) {
         if ((e.ctrlKey || e.metaKey) !== Boolean(b.ctrl || b.meta)) continue;
         if (e.shiftKey !== Boolean(b.shift)) continue;
         if (e.altKey !== Boolean(b.alt)) continue;
@@ -40,5 +52,5 @@ export function useShortcuts(bindings: Binding[]) {
     }
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [bindings]);
+  }, []);
 }

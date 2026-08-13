@@ -1,19 +1,18 @@
 from datetime import datetime
-from typing import List, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
 
 class EventBase(BaseModel):
     title: str = Field(..., min_length=1, max_length=200)
-    description: Optional[str] = None
+    description: str | None = None
     event_type: str = "main"
-    story_time: Optional[str] = Field(None, max_length=120)
-    location: Optional[str] = Field(None, max_length=120)
+    story_time: str | None = Field(None, max_length=120)
+    location: str | None = Field(None, max_length=120)
     importance: int = Field(3, ge=1, le=5)
     status: str = "planned"
-    chapter_id: Optional[int] = None
-    notes: Optional[str] = None
+    chapter_id: int | None = None
+    notes: str | None = None
 
 
 class EventCreate(EventBase):
@@ -21,15 +20,15 @@ class EventCreate(EventBase):
 
 
 class EventUpdate(BaseModel):
-    title: Optional[str] = Field(None, min_length=1, max_length=200)
-    description: Optional[str] = None
-    event_type: Optional[str] = None
-    story_time: Optional[str] = Field(None, max_length=120)
-    location: Optional[str] = Field(None, max_length=120)
-    importance: Optional[int] = Field(None, ge=1, le=5)
-    status: Optional[str] = None
-    chapter_id: Optional[int] = None
-    notes: Optional[str] = None
+    title: str | None = Field(None, min_length=1, max_length=200)
+    description: str | None = None
+    event_type: str | None = None
+    story_time: str | None = Field(None, max_length=120)
+    location: str | None = Field(None, max_length=120)
+    importance: int | None = Field(None, ge=1, le=5)
+    status: str | None = None
+    chapter_id: int | None = None
+    notes: str | None = None
 
 
 class EventOut(EventBase):
@@ -44,7 +43,7 @@ class EventOut(EventBase):
 class EventCharacterIn(BaseModel):
     character_id: int
     role: str = "participant"
-    note: Optional[str] = Field(None, max_length=500)
+    note: str | None = Field(None, max_length=500)
 
 
 class EventCharacterOut(BaseModel):
@@ -54,14 +53,14 @@ class EventCharacterOut(BaseModel):
     event_id: int
     character_id: int
     role: str
-    note: Optional[str] = None
+    note: str | None = None
 
 
 class EventLinkIn(BaseModel):
     source_event_id: int
     target_event_id: int
     link_type: str = "causes"
-    note: Optional[str] = Field(None, max_length=500)
+    note: str | None = Field(None, max_length=500)
 
 
 class EventLinkOut(BaseModel):
@@ -72,10 +71,10 @@ class EventLinkOut(BaseModel):
     source_event_id: int
     target_event_id: int
     link_type: str
-    note: Optional[str] = None
+    note: str | None = None
 
 
 class EventWithRelations(EventOut):
-    character_links: List[EventCharacterOut] = []
-    links_out: List[EventLinkOut] = []
-    links_in: List[EventLinkOut] = []
+    character_links: list[EventCharacterOut] = []
+    links_out: list[EventLinkOut] = []
+    links_in: list[EventLinkOut] = []

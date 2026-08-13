@@ -303,5 +303,5 @@ def render(prompt: Prompt, variables: dict[str, Any]) -> tuple[str, str]:
     try:
         user = prompt.user_template.format_map(safe_vars)
     except KeyError as e:
-        raise ValueError(f"Missing variable for prompt '{prompt.name}': {e}")
+        raise ValueError(f"Missing variable for prompt '{prompt.name}': {e}") from e
     return prompt.system, user

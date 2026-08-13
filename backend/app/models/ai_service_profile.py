@@ -1,6 +1,5 @@
-from typing import Optional
 
-from sqlalchemy import Boolean, Float, Integer, String, Text
+from sqlalchemy import Boolean, Float, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base, TimestampMixin
@@ -20,7 +19,7 @@ class AIServiceProfile(Base, TimestampMixin):
     name: Mapped[str] = mapped_column(String(40), nullable=False, unique=True)
     provider: Mapped[str] = mapped_column(String(40), nullable=False)
     base_url: Mapped[str] = mapped_column(String(200), nullable=False)
-    api_key: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    api_key: Mapped[str] = mapped_column(String(200), nullable=False, default="")
     model: Mapped[str] = mapped_column(String(80), nullable=False)
     temperature: Mapped[float] = mapped_column(Float, nullable=False, default=0.7)
     is_default: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)

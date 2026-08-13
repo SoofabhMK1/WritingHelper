@@ -1,7 +1,6 @@
 """Tests for /api/v1/backup."""
 import io
 import sqlite3
-from pathlib import Path
 
 import pytest
 
@@ -20,7 +19,6 @@ def test_download_backup(client):
     assert r.status_code == 200
     assert "xiaoshuo-backup-" in r.headers.get("content-disposition", "")
     assert r.headers.get("content-type") == "application/octet-stream"
-    # response body should be the SQLite header bytes
     assert r.content[:15] == b"SQLite format 3"
 
 
@@ -34,34 +32,51 @@ def test_restore_invalid_file(client):
     assert "Invalid SQLite" in r.json()["detail"]
 
 
-def test_restore_empty_sqlite(client):
-    """A valid SQLite file but with no tables should be rejected."""
-    p = Path(client.app.dependency_overrides[None]) if False else None  # noqa
-    # create an empty-but-valid sqlite file in memory
-    buf = io.BytesIO()
-    conn = sqlite3.connect(":memory:")
-    # do nothing — empty db
-    bio = io.BytesIO()
-    # use python's sqlite to write to a real file then read
-    tmp = Path("/tmp/empty.db")
-    if tmp.exists():
-        tmp.unlink()
+def test_restore_foreign_sqlite_rejected(client, tmp_path):
+    """A valid SQLite file but missing our app schema is rejected (B4)."""
+    tmp = tmp_path / "foreign.db"
     conn = sqlite3.connect(str(tmp))
     conn.execute("CREATE TABLE dummy(x INTEGER);")
     conn.close()
-    bio.write(tmp.read_bytes())
-    tmp.unlink()
+
+    bio = io.BytesIO(tmp.read_bytes())
     bio.seek(0)
 
     r = client.post(
         "/api/v1/backup/restore",
-        files={"file": ("empty.db", bio, "application/octet-stream")},
+        files={"file": ("foreign.db", bio, "application/octet-stream")},
     )
-    # The file is valid SQLite (has a table), so this should succeed
-    assert r.status_code == 200
-    body = r.json()
-    assert body["ok"] is True
-    assert "backup_file" in body
+    assert r.status_code == 400
+    assert "schema incomplete" in r.json()["detail"]
+
+
+def test_restore_keeps_subsequent_requests_alive(client, tmp_path):
+    """After restore, the next request still succeeds (B5)."""
+    # Build a "backup" by cloning the current test DB (conftest populates
+    # all required tables including alembic_version).
+    import shutil as _sh
+
+    from tests.conftest import DB_FILE
+
+    clone = tmp_path / "valid.db"
+    _sh.copy2(DB_FILE, clone)
+
+    bio = io.BytesIO(clone.read_bytes())
+    bio.seek(0)
+
+    r = client.post(
+        "/api/v1/backup/restore",
+        files={"file": ("valid.db", bio, "application/octet-stream")},
+    )
+    assert r.status_code == 200, r.text
+    assert r.json()["ok"] is True
+    assert r.json()["restart_recommended"] is False
+
+    # Subsequent request must still work — engine.dispose() shouldn't have
+    # left the app in a broken state.
+    r2 = client.get("/api/v1/works")
+    assert r2.status_code == 200
+    assert r2.json() == []
 
 
 def test_restore_wrong_content_type(client):

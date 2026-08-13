@@ -1,4 +1,3 @@
-from typing import Optional
 
 from sqlalchemy import ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
@@ -22,23 +21,23 @@ class LlmRequestLog(Base, TimestampMixin):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     prompt_name: Mapped[str] = mapped_column(String(40), nullable=False)
     endpoint: Mapped[str] = mapped_column(String(80), nullable=False)
-    work_id: Mapped[Optional[int]] = mapped_column(
+    work_id: Mapped[int | None] = mapped_column(
         ForeignKey("works.id", ondelete="SET NULL"),
         nullable=True,
     )
     system: Mapped[str] = mapped_column(Text, nullable=False, default="")
     user: Mapped[str] = mapped_column(Text, nullable=False, default="")
-    response: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    response: Mapped[str | None] = mapped_column(Text, nullable=True)
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="ok")
-    error: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    error: Mapped[str | None] = mapped_column(Text, nullable=True)
     duration_ms: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    model: Mapped[Optional[str]] = mapped_column(String(80), nullable=True)
-    profile_id: Mapped[Optional[int]] = mapped_column(
+    model: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    profile_id: Mapped[int | None] = mapped_column(
         ForeignKey("ai_service_profiles.id", ondelete="SET NULL"),
         nullable=True,
     )
-    provider: Mapped[Optional[str]] = mapped_column(String(40), nullable=True)
-    prompt_assembly_id: Mapped[Optional[int]] = mapped_column(
+    provider: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    prompt_assembly_id: Mapped[int | None] = mapped_column(
         ForeignKey("prompt_assemblies.id", ondelete="SET NULL"),
         nullable=True,
     )

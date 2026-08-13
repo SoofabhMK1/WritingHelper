@@ -1,5 +1,4 @@
 from enum import Enum
-from typing import Optional
 
 from sqlalchemy import ForeignKey, Index, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
@@ -39,7 +38,7 @@ class CharacterState(Base, TimestampMixin):
         nullable=False,
         index=True,
     )
-    chapter_id: Mapped[Optional[int]] = mapped_column(
+    chapter_id: Mapped[int | None] = mapped_column(
         Integer,
         ForeignKey("chapters.id", ondelete="SET NULL"),
         nullable=True,
@@ -50,8 +49,8 @@ class CharacterState(Base, TimestampMixin):
     )
     state_key: Mapped[str] = mapped_column(String(80), nullable=False)
     state_value: Mapped[str] = mapped_column(String(500), nullable=False)
-    note: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    captured_at: Mapped[Optional[str]] = mapped_column(String(40), nullable=True, index=True)
+    note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    captured_at: Mapped[str | None] = mapped_column(String(40), nullable=True, index=True)
 
     __table_args__ = (
         Index("ix_state_lookup", "character_id", "state_type", "state_key"),

@@ -1,12 +1,11 @@
 from datetime import datetime
-from typing import Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
 
 class VolumeBase(BaseModel):
     title: str = Field(..., min_length=1, max_length=200)
-    summary: Optional[str] = None
+    summary: str | None = None
     order_num: int = 0
     status: str = "planning"
     target_words: int = Field(0, ge=0)
@@ -17,11 +16,11 @@ class VolumeCreate(VolumeBase):
 
 
 class VolumeUpdate(BaseModel):
-    title: Optional[str] = Field(None, min_length=1, max_length=200)
-    summary: Optional[str] = None
-    order_num: Optional[int] = None
-    status: Optional[str] = None
-    target_words: Optional[int] = Field(None, ge=0)
+    title: str | None = Field(None, min_length=1, max_length=200)
+    summary: str | None = None
+    order_num: int | None = None
+    status: str | None = None
+    target_words: int | None = Field(None, ge=0)
 
 
 class VolumeOut(VolumeBase):

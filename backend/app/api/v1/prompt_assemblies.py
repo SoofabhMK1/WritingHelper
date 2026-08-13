@@ -1,4 +1,3 @@
-from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
@@ -16,9 +15,9 @@ from app.services import prompt_assembly as assembly_service
 router = APIRouter(prefix="/prompt-assemblies", tags=["prompt-assemblies"])
 
 
-@router.get("", response_model=List[PromptAssemblyOut])
+@router.get("", response_model=list[PromptAssemblyOut])
 def list_assemblies(
-    q: Optional[str] = Query(None),
+    q: str | None = Query(None),
     db: Session = Depends(get_db),
 ):
     return assembly_service.list_assemblies(db, q=q)
@@ -76,4 +75,6 @@ def render_assembly(
     try:
         return assembly_service.render_assembly(db, row, payload.variables)
     except assembly_service.AssemblyRenderError as e:
-        raise HTTPException(status_code=422, detail={"code": e.code, "message": str(e)})
+        raise HTTPException(
+            status_code=422, detail={"code": e.code, "message": str(e)}
+        ) from e

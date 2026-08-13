@@ -500,7 +500,7 @@ export function AISettings() {
           >
             <Input.Password placeholder="sk-..." />
           </Form.Item>
-          <Form.Item name="is_default" label="设为默认" valuePropName="checked">
+          <Form.Item name="is_default" label="设为默认">
             <Select
               options={[
                 { value: false, label: "否(可作为专用 API)" },

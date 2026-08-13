@@ -12,6 +12,9 @@ step() {
 step "Backend pytest"
 (cd "$BACKEND" && .venv/bin/python -m pytest -v)
 
+step "Frontend typecheck"
+(cd "$FRONTEND" && npm run typecheck)
+
 step "Frontend lint"
 (cd "$FRONTEND" && npm run lint)
 

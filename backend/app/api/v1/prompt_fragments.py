@@ -1,4 +1,3 @@
-from typing import List, Optional
 
 from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.orm import Session
@@ -14,9 +13,9 @@ from app.services import prompt_fragment as fragment_service
 router = APIRouter(prefix="/prompt-fragments", tags=["prompt-fragments"])
 
 
-@router.get("", response_model=List[PromptFragmentOut])
+@router.get("", response_model=list[PromptFragmentOut])
 def list_fragments(
-    q: Optional[str] = Query(None),
+    q: str | None = Query(None),
     db: Session = Depends(get_db),
 ):
     return fragment_service.list_fragments(db, q=q)

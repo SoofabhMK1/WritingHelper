@@ -110,8 +110,12 @@ export function TiptapEditor({
       dirtyRef.current = false;
       setSavedAt(new Date());
       setPending("saved");
-    } catch {
-      setPending("idle");
+    } catch (e) {
+      // Don't silently swallow — the parent may have rejected because of a
+      // form-validation failure that the user needs to see and fix.
+      const msg = e instanceof Error ? e.message : String(e);
+      message.error(`自动保存失败: ${msg}`);
+      setPending("dirty");
     }
   }
 
@@ -135,13 +139,14 @@ export function TiptapEditor({
 
   const charCount = editor?.storage.characterCount.characters() ?? 0;
   const wordCount = editor?.storage.characterCount.words() ?? 0;
-  // 中文按字数计,英文按词数计
+  // 中文按字数计,英文按词数计。`editor?.state.doc` 在每次键击后变化,
+  // 与 `charCount` 同步刷新,deps 只用 `editor` 与 `charCount` 即可。
   const cjkChars = useMemo(() => {
     if (!editor) return 0;
     const text = editor.getText();
     const matches = text.match(/[\u4e00-\u9fff\u3400-\u4dbf]/g);
     return matches ? matches.length : 0;
-  }, [editor?.state.doc, charCount]);
+  }, [editor, charCount]);
 
   function onAIContinue() {
     if (!editor) return;

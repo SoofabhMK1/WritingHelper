@@ -7,8 +7,6 @@ via ``ON DELETE SET NULL``. The list endpoint accepts an optional
 """
 from __future__ import annotations
 
-from typing import Optional
-
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
@@ -21,9 +19,9 @@ router = APIRouter(prefix="/ai-logs", tags=["ai-logs"])
 
 @router.get("", response_model=LlmRequestLogList)
 def list_logs(
-    work_id: Optional[int] = Query(None, ge=1),
-    prompt_name: Optional[str] = Query(None, max_length=40),
-    log_status: Optional[str] = Query(None, alias="status", max_length=20),
+    work_id: int | None = Query(None, ge=1),
+    prompt_name: str | None = Query(None, max_length=40),
+    status: str | None = Query(None, alias="status", max_length=20),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=200),
     db: Session = Depends(get_db),
@@ -32,7 +30,7 @@ def list_logs(
         db,
         work_id=work_id,
         prompt_name=prompt_name,
-        status=log_status,
+        status=status,
         page=page,
         page_size=page_size,
     )
@@ -54,8 +52,8 @@ def get_log(log_id: int, db: Session = Depends(get_db)):
 
 @router.delete("", status_code=status.HTTP_200_OK)
 def clear_logs(
-    work_id: Optional[int] = Query(None, ge=1),
-    prompt_name: Optional[str] = Query(None, max_length=40),
+    work_id: int | None = Query(None, ge=1),
+    prompt_name: str | None = Query(None, max_length=40),
     db: Session = Depends(get_db),
 ):
     deleted = service.clear_logs(

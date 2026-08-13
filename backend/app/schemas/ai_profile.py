@@ -1,4 +1,4 @@
-from typing import Optional
+from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -12,20 +12,20 @@ class AIProfileBase(BaseModel):
 
 
 class AIProfileCreate(AIProfileBase):
-    api_key: Optional[str] = None
+    api_key: str | None = None
     is_default: bool = False
 
 
 class AIProfileUpdate(BaseModel):
     """Partial update. Use ``api_key=""`` to clear, ``None`` to leave."""
 
-    name: Optional[str] = Field(None, min_length=1, max_length=40)
-    provider: Optional[str] = Field(None, max_length=40)
-    base_url: Optional[str] = Field(None, min_length=1, max_length=200)
-    model: Optional[str] = Field(None, min_length=1, max_length=80)
-    temperature: Optional[float] = Field(None, ge=0, le=2)
-    api_key: Optional[str] = None
-    is_default: Optional[bool] = None
+    name: str | None = Field(None, min_length=1, max_length=40)
+    provider: str | None = Field(None, max_length=40)
+    base_url: str | None = Field(None, min_length=1, max_length=200)
+    model: str | None = Field(None, min_length=1, max_length=80)
+    temperature: float | None = Field(None, ge=0, le=2)
+    api_key: str | None = None
+    is_default: bool | None = None
 
 
 class AIProfileOut(BaseModel):
@@ -41,8 +41,8 @@ class AIProfileOut(BaseModel):
     temperature: float
     is_default: bool
     has_api_key: bool
-    created_at: Optional[str] = None
-    updated_at: Optional[str] = None
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
 
 
 class AIProfileSummary(BaseModel):
@@ -59,11 +59,11 @@ class AIProfileSummary(BaseModel):
 class AssignmentMap(BaseModel):
     """``prompt_name -> profile_id`` (null means "use default")."""
 
-    assignments: dict[str, Optional[int]] = Field(default_factory=dict)
+    assignments: dict[str, int | None] = Field(default_factory=dict)
 
 
 class AssignmentUpdate(BaseModel):
-    profile_id: Optional[int] = None
+    profile_id: int | None = None
 
 
 class AIStatusOut(BaseModel):
@@ -79,7 +79,7 @@ class AIStatusOut(BaseModel):
     model: str = ""
     temperature: float = 0.0
     provider: str = ""
-    default_profile_id: Optional[int] = None
-    default_profile_name: Optional[str] = None
+    default_profile_id: int | None = None
+    default_profile_name: str | None = None
     profiles: list[AIProfileSummary] = Field(default_factory=list)
-    assignments: dict[str, Optional[int]] = Field(default_factory=dict)
+    assignments: dict[str, int | None] = Field(default_factory=dict)

@@ -32,13 +32,13 @@ class Chapter(Base, TimestampMixin):
     work_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("works.id", ondelete="CASCADE"), nullable=False, index=True
     )
-    volume_id: Mapped[Optional[int]] = mapped_column(
+    volume_id: Mapped[int | None] = mapped_column(
         Integer, ForeignKey("volumes.id", ondelete="CASCADE"), nullable=True, index=True
     )
     title: Mapped[str] = mapped_column(String(200), nullable=False)
-    summary: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    outline: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    content: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    summary: Mapped[str | None] = mapped_column(Text, nullable=True)
+    outline: Mapped[str | None] = mapped_column(Text, nullable=True)
+    content: Mapped[str | None] = mapped_column(Text, nullable=True)
     order_num: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     target_words: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     actual_words: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
@@ -48,7 +48,7 @@ class Chapter(Base, TimestampMixin):
     chapter_type: Mapped[str] = mapped_column(
         String(20), default=ChapterType.PLOT.value, nullable=False
     )
-    mood: Mapped[Optional[str]] = mapped_column(String(80), nullable=True)
+    mood: Mapped[str | None] = mapped_column(String(80), nullable=True)
 
     volume: Mapped[Optional["Volume"]] = relationship(  # noqa: F821
         back_populates="chapters"

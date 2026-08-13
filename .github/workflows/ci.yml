@@ -1,0 +1,92 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  backend:
+    name: backend (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Create venv
+        shell: pwsh
+        run: |
+          python -m venv .venv
+          .venv/Scripts/python.exe -m pip install --upgrade pip
+        if: runner.os == 'Windows'
+
+      - name: Create venv
+        if: runner.os != 'Windows'
+        run: |
+          python3 -m venv .venv
+          .venv/bin/python -m pip install --upgrade pip
+
+      - name: Install deps
+        shell: pwsh
+        run: .venv/Scripts/python.exe -m pip install -r requirements.txt
+        if: runner.os == 'Windows'
+
+      - name: Install deps
+        if: runner.os != 'Windows'
+        run: .venv/bin/python -m pip install -r requirements.txt
+
+      - name: Pytest
+        shell: pwsh
+        run: .venv/Scripts/python.exe -m pytest -v
+        if: runner.os == 'Windows'
+
+      - name: Pytest
+        if: runner.os != 'Windows'
+        run: .venv/bin/python -m pytest -v
+
+  frontend:
+    name: frontend (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install deps
+        run: npm ci
+
+      - name: Type check
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Vitest
+        run: npx vitest run --testTimeout 15000
+
+      - name: Build
+        run: npm run build

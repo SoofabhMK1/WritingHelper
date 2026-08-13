@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import type { CSSProperties } from "react";
 import {
   Alert,
   Button,
@@ -8,7 +9,6 @@ import {
   Empty,
   Form,
   Input,
-  Modal,
   Popconfirm,
   Radio,
   Row,
@@ -87,7 +87,7 @@ function partSummary(part: Part, fragmentNames: Record<number, string>): string 
   }
 }
 
-const preStyle: React.CSSProperties = {
+const preStyle: CSSProperties = {
   whiteSpace: "pre-wrap",
   wordBreak: "break-word",
   fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
@@ -338,9 +338,9 @@ export function PromptAssemblyEditor({
         { id: assemblyId!, variables: previewVars },
         {
           onError: (e: Error) => {
-            // Surface server-side validation issues but don't toast loudly
-            // (it's the preview pane — see the alert below).
-            console.warn("preview render failed", e);
+            // Render errors show inline via `previewVarsError`; the
+            // `renderMut.error` message is what the alert below displays.
+            setPreviewVarsError(e.message);
           },
         },
       );
@@ -584,7 +584,15 @@ function BlockColumn({
             return (
               <div
                 key={i}
+                role="button"
+                tabIndex={0}
                 onClick={() => onSelect(i)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    onSelect(i);
+                  }
+                }}
                 style={{
                   border: isSelected
                     ? "1px solid #1677ff"
@@ -924,40 +932,5 @@ function PreviewPane({
         </Form.Item>
       </Form>
     </Card>
-  );
-}
-
-// ============================================================================
-// New-assembly dialog wrapper (used by list page)
-// ============================================================================
-
-interface NewAssemblyModalProps {
-  open: boolean;
-  onClose: () => void;
-  onCreated: (row: PromptAssembly) => void;
-}
-
-export function NewAssemblyModal({
-  open,
-  onClose,
-  onCreated,
-}: NewAssemblyModalProps) {
-  if (!open) return null;
-  return (
-    <Modal
-      open={open}
-      onCancel={onClose}
-      footer={null}
-      width={1200}
-      destroyOnClose
-      title="新建组合"
-      style={{ top: 24 }}
-    >
-      <PromptAssemblyEditor
-        onAfterSave={(row) => {
-          onCreated(row);
-        }}
-      />
-    </Modal>
   );
 }

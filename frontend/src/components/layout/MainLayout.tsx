@@ -1,4 +1,5 @@
-import { Layout, Menu } from "antd";
+import { Layout, Menu, Button } from "antd";
+import type { CSSProperties } from "react";
 import {
   BulbOutlined,
   ExperimentOutlined,
@@ -8,7 +9,9 @@ import {
 } from "@ant-design/icons";
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useUiStore } from "@/store/theme";
+import { useAIDrawer } from "@/store/aiDrawer";
 import { useShortcuts } from "@/hooks/useShortcuts";
+import { AIDrawer } from "@/components/outline/AIDrawer";
 
 const { Header, Sider, Content } = Layout;
 
@@ -17,6 +20,8 @@ export function MainLayout() {
   const { pathname } = useLocation();
   const theme = useUiStore((s) => s.theme);
   const toggleTheme = useUiStore((s) => s.toggleTheme);
+  const aiTarget = useAIDrawer((s) => s.target);
+  const closeAIDrawer = useAIDrawer((s) => s.close);
 
   useShortcuts([
     {
@@ -45,7 +50,7 @@ export function MainLayout() {
   else if (pathname.startsWith("/ai-logs")) selectedKey = "/ai-logs";
   else if (pathname.startsWith("/works")) selectedKey = "/";
 
-  const headerStyle: React.CSSProperties = {
+  const headerStyle: CSSProperties = {
     paddingLeft: 24,
     display: "flex",
     justifyContent: "space-between",
@@ -72,19 +77,20 @@ export function MainLayout() {
       <Layout>
         <Header style={headerStyle}>
           <h2 style={{ margin: 0, fontWeight: 500 }}>AI 辅助写作系统</h2>
-          <a
+          <Button
+            type="text"
             onClick={toggleTheme}
-            style={{ cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}
+            icon={<BulbOutlined />}
             title="Ctrl+Shift+D 切换主题"
           >
-            <BulbOutlined />
             {theme === "dark" ? "深色" : "浅色"}
-          </a>
+          </Button>
         </Header>
         <Content style={{ margin: 24, padding: 24, borderRadius: 8 }}>
           <Outlet />
         </Content>
       </Layout>
+      <AIDrawer target={aiTarget} onClose={closeAIDrawer} />
     </Layout>
   );
 }

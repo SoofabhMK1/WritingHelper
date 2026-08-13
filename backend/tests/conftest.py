@@ -24,8 +24,9 @@ os.environ["ALEMBIC_DATABASE_URL"] = f"sqlite:///{DB_FILE.as_posix()}"
 import app.config  # noqa: E402
 app.config.get_settings.cache_clear()
 
-from app.database import Base, get_db  # noqa: E402
+from app.database import get_db  # noqa: E402
 from app.main import app  # noqa: E402
+from app.models.base import Base  # noqa: E402
 
 engine = create_engine(
     f"sqlite:///{DB_FILE.as_posix()}",
@@ -55,6 +56,15 @@ def _override_get_db():
 def _reset_db():
     Base.metadata.drop_all(bind=engine)
     Base.metadata.create_all(bind=engine)
+    # mirror alembic's bookkeeping table so backup-restore schema validation
+    # sees the same surface as a production DB.
+    with engine.begin() as conn:
+        conn.exec_driver_sql(
+            "CREATE TABLE IF NOT EXISTS alembic_version (version_num VARCHAR(32) NOT NULL)"
+        )
+        conn.exec_driver_sql(
+            "INSERT OR REPLACE INTO alembic_version VALUES ('0014_drop_event_link_created_at')"
+        )
     yield
     Base.metadata.drop_all(bind=engine)
 

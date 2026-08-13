@@ -64,12 +64,12 @@ class TestCloneBuiltin:
         assert "{tail}" in row.user_parts_json
         assert "{work_title}" in row.user_parts_json
 
-    def test_clone_unknown_prompt_404(self, db_session):
-        from fastapi import HTTPException
+    def test_clone_unknown_prompt_raises_domain_error(self, db_session):
+        from app.services.ai_prompt_template import UnknownPromptError
 
-        with pytest.raises(HTTPException) as ei:
+        with pytest.raises(UnknownPromptError) as ei:
             clone_builtin_to_assembly(db_session, "nope", name="x")
-        assert ei.value.status_code == 404
+        assert ei.value.prompt_name == "nope"
 
 
 # =============================================================================
@@ -96,19 +96,19 @@ class TestBindingCRUD:
         set_binding(db_session, "outline", None)
         assert list_bindings(db_session) == {"outline": None}
 
-    def test_unknown_prompt_400(self, db_session):
-        from fastapi import HTTPException
+    def test_unknown_prompt_raises_domain_error(self, db_session):
+        from app.services.ai_prompt_template import UnknownPromptError
 
-        with pytest.raises(HTTPException) as ei:
+        with pytest.raises(UnknownPromptError) as ei:
             set_binding(db_session, "bogus", 1)
-        assert ei.value.status_code == 400
+        assert ei.value.prompt_name == "bogus"
 
-    def test_unknown_assembly_400(self, db_session):
-        from fastapi import HTTPException
+    def test_unknown_assembly_raises_domain_error(self, db_session):
+        from app.services.ai_prompt_template import UnknownAssemblyError
 
-        with pytest.raises(HTTPException) as ei:
+        with pytest.raises(UnknownAssemblyError) as ei:
             set_binding(db_session, "outline", 99999)
-        assert ei.value.status_code == 400
+        assert ei.value.assembly_id == 99999
 
     def test_clear_binding(self, db_session):
         asm = clone_builtin_to_assembly(

@@ -10,10 +10,8 @@ built-in prompt so the user can edit it freely.
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Dict, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
-
 
 # ============================================================================
 # Binding
@@ -25,7 +23,7 @@ class AIPromptTemplateBindingOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     prompt_name: str
-    assembly_id: Optional[int] = None
+    assembly_id: int | None = None
     updated_at: datetime
 
 
@@ -36,13 +34,13 @@ class AIPromptTemplateBindingsOut(BaseModel):
     so the frontend can build an O(1) lookup.
     """
 
-    bindings: Dict[str, Optional[int]]
+    bindings: dict[str, int | None]
 
 
 class AIPromptTemplateBindingUpdate(BaseModel):
     """PATCH-style payload. ``assembly_id=None`` resets to the built-in."""
 
-    assembly_id: Optional[int] = Field(
+    assembly_id: int | None = Field(
         None,
         description=(
             "Target prompt_assemblies.id; pass null to use the built-in "
@@ -74,4 +72,4 @@ class AIClonePromptRequest(BaseModel):
     """Request body for ``POST /ai/prompts/{name}/clone``."""
 
     name: str = Field(..., min_length=1, max_length=120)
-    description: Optional[str] = None
+    description: str | None = None

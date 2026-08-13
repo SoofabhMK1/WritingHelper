@@ -12,6 +12,7 @@ import {
   Typography,
   message,
 } from "antd";
+import { ArrowLeftOutlined } from "@ant-design/icons";
 import { useNavigate, useParams } from "react-router-dom";
 import {
   useCreateWork,
@@ -106,9 +107,19 @@ export function WorkForm() {
 
   return (
     <div style={{ maxWidth: 900, margin: "0 auto" }}>
-      <Typography.Title level={3}>
-        {isEditMode ? "编辑作品" : "新建作品"}
-      </Typography.Title>
+      <Space style={{ marginBottom: 16 }} wrap>
+        <Button
+          icon={<ArrowLeftOutlined />}
+          onClick={() =>
+            navigate(isEditMode && wid ? `/works/${wid}` : "/")
+          }
+        >
+          {isEditMode ? "返回作品详情" : "返回作品库"}
+        </Button>
+        <Typography.Title level={3} style={{ margin: 0 }}>
+          {isEditMode ? "编辑作品" : "新建作品"}
+        </Typography.Title>
+      </Space>
       <Card>
         <Form
           form={form}
@@ -183,7 +194,6 @@ export function WorkForm() {
               <Button type="primary" htmlType="submit" loading={creating || updating}>
                 {isEditMode ? "保存" : "创建"}
               </Button>
-              <Button onClick={() => navigate(-1)}>取消</Button>
             </Space>
           </Form.Item>
         </Form>

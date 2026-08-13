@@ -9,18 +9,21 @@ A single-user, local-first AI-assisted Chinese novel writing tool.
 
 - **Backend** (FastAPI + SQLAlchemy 2 + SQLite): manages works, volumes,
   chapters, characters, protagonists, events, character states,
-  foreshadowing, app settings (KV), LLM request/response audit log;
+  foreshadowing, app settings (KV), AI service profiles, prompt
+  assemblies + bindings, and the LLM request/response audit log;
   exposes an OpenAI-compatible AI client.
 - **Frontend** (React 18 + Vite + TypeScript + Ant Design 5 + Tiptap): a
-  single-page app for the above, with a rich-text editor, AI drawers,
-  and an LLM request log.
+  single-page app for the above, with a rich-text editor, AI drawer,
+  and LLM request log.
 - **AI**: configured at runtime as **multiple saved API profiles** (see
   `ai_service_profiles` / `ai_prompt_assignments`). The user can register
   any number of OpenAI-compatible endpoints, mark one as default, and
   optionally bind specific AI services (续写/扩写/大纲 等) to a non-default
   profile via `ai_prompt_assignments(prompt_name -> profile_id)`. UI lives
   at `/settings/ai`. A missing API key still raises
-  `AIServiceError(code="not_configured")` → HTTP 503.
+  `AIServiceError(code="not_configured")` → HTTP 503. The legacy single
+  `app_settings` ai.* keys are migrated into a default profile named
+  `迁移自旧配置` exactly once at **app startup** (not per-request anymore).
 
 Implemented end-to-end (P0–P7). Tests cover everything that has a public
 API. See `README.md` for the user-facing overview.
@@ -36,28 +39,41 @@ xiaoshuo-mk1/
 │   │   ├── database.py            engine + SQLite FK pragma listener
 │   │   ├── models/                SQLAlchemy ORM (one file per table)
 │   │   ├── schemas/               Pydantic in/out models
-│   │   ├── services/              business logic (currently just settings.py)
-│   │   ├── api/v1/                FastAPI routers, aggregated in api/router.py
-│   │   └── ai/                    OpenAI client + prompts + context builder
+│   │   ├── services/              business logic: settings, ai_profiles,
+│   │   │                          ai_prompt_template, llm_log,
+│   │   │                          prompt_assembly, prompt_fragment
+│   │   ├── api/v1/                FastAPI routers (one per resource)
+│   │   │   ├── deps.py            shared get_work_or_404 /
+│   │   │   │                      get_scoped_or_404 /
+│   │   │   │                      validate_child_belongs_to_work helpers
+│   │   │   └── router.py          aggregates every router under /api/v1
+│   │   └── ai/                    OpenAI client, prompts, context builder,
+│   │                              AIEndpoint enum (endpoint registry)
 │   ├── alembic/                   migrations + env.py
-│   ├── tests/                     pytest (uses TestClient + tmp sqlite)
+│   ├── tests/                     pytest (~308 tests, see "Tests" below)
+│   ├── pyproject.toml             ruff + mypy + pytest-cov config
 │   └── requirements.txt
 ├── frontend/
 │   ├── src/
 │   │   ├── api/                   axios + react-query hooks (one file per resource)
-│   │   ├── components/            layout / editor (Tiptap) / outline
+│   │   ├── components/            layout / ErrorBoundary / editor (Tiptap) / outline
 │   │   ├── pages/                 route-level screens
-│   │   ├── store/                 zustand stores (theme, ui)
+│   │   ├── store/                 zustand stores (theme, aiDrawer)
 │   │   ├── hooks/                 useShortcuts
 │   │   ├── types/                 shared types + mapping tables (LABEL/COLOR)
-│   │   ├── test/setup.ts          vitest jsdom setup
+│   │   ├── test/setup.ts          vitest jsdom setup (matchMedia, ResizeObserver)
 │   │   └── router.tsx             createBrowserRouter
+│   ├── eslint.config.js           ESLint flat config (react / hooks / a11y)
+│   ├── .prettierrc                Prettier config
 │   └── vite.config.ts             proxies /api → 127.0.0.1:8000
 ├── scripts/
 │   ├── install.bat / .sh          first-time setup
 │   ├── start-backend.ps1 / .sh    runs uvicorn
 │   ├── start-frontend.ps1 / .sh   runs vite
-│   └── test-all.ps1 / .sh         backend pytest + frontend lint+test+build
+│   └── test-all.ps1 / .sh         backend pytest + frontend typecheck+lint+test+build
+├── .github/workflows/ci.yml       CI matrix (Ubuntu + Windows)
+├── .editorconfig / .nvmrc / .python-version / .gitignore
+├── AGENTS.md                      this file (AI agent / IDE conventions)
 └── README.md                      user-facing docs
 ```
 
@@ -101,6 +117,13 @@ otherwise every query fails with `no such table: <name>`.
     `llm_request_logs.profile_id` → `ON DELETE SET NULL` (deleting an
     API profile must not destroy audit history; affected prompts fall
     back to the default profile)
+  - `llm_request_logs.prompt_assembly_id` and
+    `ai_prompt_template_bindings.assembly_id` → `ON DELETE SET NULL`
+    (deleting a custom assembly must not destroy the audit log or the
+    binding row; the prompt falls back to the built-in template)
+  - `event_links.work_id` is **denormalized** from `source_event.work_id`
+    for query speed — it is required, indexed, and verified at insert time
+    via `_get_event_or_404`. Do not drop this column.
 - The `SQLite FK pragma=ON` listener is wired in `app/database.py` AND in
   `tests/conftest.py`. **Do not remove the conftest copy** — pytest creates
   its own engine.
@@ -110,36 +133,60 @@ otherwise every query fails with `no such table: <name>`.
   breaks ordering tests.
 - Schemas are in `app/schemas/<resource>.py`. `Create` and `Update` are
   separate; `Update` uses `Optional[...]` so `exclude_unset=True` works.
+- Service-layer functions that hand data back to routes should return
+  Pydantic instances (`AIProfileOut.model_validate(...)`,
+  `LlmRequestLogSummary.model_validate(...)`, `SettingOut.model_validate(...)`),
+  not raw dicts — so schema validators stay in one place.
+- The AI context builder (`app/ai/context.py`) caps every free-text
+  field at 200 characters and appends `…` on truncation. Bumping a
+  context field past that limit will silently truncate; if you need
+  more room, prefer linking by id over inlining.
 - API routes are mounted in `app/api/router.py` with prefix `/api/v1`.
   Every resource router uses `prefix="/works/{work_id}/<resource>"` to keep
-  resources scoped under their work.
+  resources scoped under their work. Shared 404 / scope-validation
+  helpers live in `app/api/v1/deps.py` — every router imports
+  `get_work_or_404`, `get_scoped_or_404`, and
+  `validate_child_belongs_to_work` from there instead of writing its own.
+  The `chapters` router is mounted with `prefix="/works/{work_id}/chapters"`
+  (same pattern as the rest); query params that filter by status use
+  `Query(None, alias="status")` with a Python variable named `status`
+  (not `chapter_status` etc.) to stay consistent across resources.
 - Test client pattern: override `get_db` with a session bound to a tmp
   engine created in `conftest.py`. Tests that need a work_id create one via
   the public API rather than fabricating rows.
 - AI client lives in `app/ai/client.py`. Resolution order at request
   time: **explicit `ai_prompt_assignments[p]`** → **default
-  `ai_service_profiles` row** → **one-shot legacy migration** from the
-  old single `app_settings` ai.* keys (created as a default profile
-  named `迁移自旧配置`, then those legacy keys are deleted) → **env
-  defaults**. `resolve_config(db, prompt_name=None)` returns an
+  `ai_service_profiles` row** → **env defaults** (the legacy single
+  `app_settings` ai.* keys are migrated into a default profile once at
+  startup by `ensure_legacy_migrated(db)` in the FastAPI `startup`
+  hook in `app/main.py`; `resolve_profile` no longer triggers it).
+  `resolve_config(db, prompt_name=None)` returns an
   `AIConfig(api_key, base_url, model, temperature, profile_id,
   profile_name, provider)`; `chat(...)` accepts an optional `cfg=...`
   so routes can resolve once and pass it through (avoiding double
   DB hits). A missing API key raises `AIServiceError(code="not_configured")`
   which the route surfaces as HTTP 503.
+- Every AI route's `endpoint` parameter is typed as `AIEndpoint` (see
+  `app/ai/endpoints.py`) — do **not** hardcode the URL string in each
+  route. The enum value flows into `LlmRequestLog.endpoint` so a typo
+  in a route can't silently end up in the audit log as a different URL.
 - **Exactly one default profile**: enforced by the service layer inside
   a single transaction (`app/services/ai_profiles.py::_ensure_single_default`)
-  rather than a DB partial unique index — chosen for multi-writer
-  safety. Any insert/update/delete that toggles `is_default` goes
-  through that helper. When the current default is deleted, the
-  oldest remaining profile is auto-promoted.
+  using two bulk `UPDATE` statements rather than loading every row into
+  Python. The constraint is held in the service rather than a DB partial
+  unique index — chosen for multi-writer safety. Any insert/update/delete
+  that toggles `is_default` goes through that helper. When the current
+  default is deleted, the oldest remaining profile is auto-promoted.
+  Demoting the only profile raises `ValueError` ("必须保留一个默认
+  profile；请先新建另一个 profile") which the route surfaces as 400.
 - **`GET /api/v1/ai/status` shape**: returns `{configured, base_url,
   model, temperature, provider, default_profile_id,
-  default_profile_name, profiles[], assignments{}}`. **Call order
-  matters** inside the handler: `resolve_config(db)` MUST run before
-  `get_default_profile(db)`, because the legacy migration runs as a
-  side-effect of `resolve_config`; reading `default_profile_id`
-  first returns `None` on the first call.
+  default_profile_name, profiles[], assignments{}}`. Call order note
+  for the very first request on a fresh DB: `resolve_config(db)` runs
+  the legacy migration as a side-effect, so it MUST run before
+  `get_default_profile(db)` to make the freshly-migrated default
+  visible in the same response. After the first call the helper is a
+  no-op.
 
 ### Frontend
 
@@ -148,21 +195,39 @@ otherwise every query fails with `no such table: <name>`.
 - Status/role enum maps: types export `*_LABEL`, `*_COLOR`, `*_OPTIONS`
   alongside the type union. Components consume the maps; never hardcode
   Chinese strings in JSX.
-- API keys, secret values: always go through `useSettings()` — never store
-  secrets in component state.
-- The `AIDrawer` in `components/outline/AIDrawer.tsx` is the canonical place
-  for AI actions. When adding a new AI capability, extend the drawer; don't
-  invent a new place.
+- AI status / profile state: `useAIStatus()` from `api/settings.ts` is
+  the single source of truth. AI mutations live in `api/aiProfile.ts`
+  and every one of them invalidates `["settings", "ai-status"]` so the
+  global status card and `AIDrawer` refresh in step.
+- The `AIDrawer` in `components/outline/AIDrawer.tsx` is the canonical
+  component for AI actions. State is held in a zustand store at
+  `store/aiDrawer.ts` and the `<Drawer>` is mounted once at the bottom
+  of `MainLayout` so any sub-page can call `openVolume(workId, v)` /
+  `openChapter(workId, c)` to summon it. When adding a new AI capability,
+  extend the drawer; don't reinvent a new place.
 - Tiptap v3: `BubbleMenu` was removed. Use the toolbar (`components/editor/TiptapEditor.tsx`).
   Custom marks live alongside `StarterKit` in the same `extensions` array.
+- **Tiptap-editor autosave** is debounced 2s and calls `onSave(html, plain)`
+  on the parent (`ChapterEditor`). The parent runs `form.validateFields()`
+  first; if validation fails, surface a `message.warning` and re-throw so
+  the editor shows the error and the `pending` state stays "dirty" (not
+  "idle"). Don't silently swallow save errors.
 - Vite manualChunks: `vendor-react`, `vendor-antd`, `vendor-query`. Do
   **not** add `@tiptap/pm` to manualChunks — it has no main entry.
+- React 18+ new JSX transform is enabled; do not import `React` for
+  JSX. Direct usage of `React.Something` (e.g. `React.CSSProperties`)
+  must be replaced with a named type import (`import type { CSSProperties } from "react"`).
+- Lint with `npm run lint` (ESLint), `npm run typecheck` (tsc). They
+  are **separate** scripts — `npm run lint` does not run the type-checker
+  anymore. Format with `npm run format` (Prettier write) before
+  committing.
 - **Every page must have a back button.** Navigation hierarchy:
   `Home → WorkOverview (/works/:wid) → sub-pages (/works/:wid/*)`.
   WorkOverview uses `返回作品库` → `/`; every other `works/:wid/*` page
   uses `返回作品详情` → `/works/:wid`. Deep pages (CharacterEditor,
   EventEditor, ChapterEditor) already return to their list page — keep
-  that pattern. Implementation:
+  that pattern. **WorkForm** is a special case: new-mode shows
+  `返回作品库`; edit-mode shows `返回作品详情`. Implementation:
   `<Button icon={<ArrowLeftOutlined />}>返回…</Button>` placed next to
   the `<Typography.Title>` inside a `<Space>` at the top of the page.
   When adding any new page under `works/:wid/*`, include this button in
@@ -239,8 +304,17 @@ otherwise every query fails with `no such table: <name>`.
 - Backend uses `pytest` with `TestClient`. `conftest.py` resets the DB per
   test by dropping/recreating all tables. New test files should follow the
   `tests/test_<resource>.py` naming.
+- Cascade integrity is covered by `tests/test_cascades.py` (per-table
+  `SET NULL` / `CASCADE` behaviour) and `tests/test_work_deletion.py`
+  (end-to-end "delete a Work wipes every scoped child but keeps the
+  global LLM audit log"). When adding a new work-scoped table, wire the
+  appropriate FK and update these two files so the cascade surface
+  stays in sync.
 - Frontend uses `vitest` with jsdom. `src/test/setup.ts` mocks `matchMedia`
   and `ResizeObserver` — extend it if a new component needs other globals.
+  Backend-style axios calls are exercised via `axios-mock-adapter`
+  inside a `QueryClientProvider` wrapper, e.g. `api/works.hooks.test.tsx`
+  is the template for hook-level coverage.
 - **AntD button-name gotcha**: AntD's `Button` inserts a literal space inside
   the inner text (likely for icon support). `getByRole({ name: "重试" })`
   fails. Use regex: `name: /重\s?试/`. This pattern shows up in
@@ -248,6 +322,14 @@ otherwise every query fails with `no such table: <name>`.
 - Use `vi.resetAllMocks()` in `beforeEach` when mocking modules.
 - For modules that read state at import time (e.g. `theme.ts`), use
   `vi.resetModules()` + dynamic `await import()` to test fresh state.
+- Coverage floors (not targets — tighten over time):
+  - backend: `pytest --cov=app.api.v1 --cov=app.services --cov=app.ai
+    --cov-branch --cov-fail-under=50` (current api.v1 + services + ai: ~94%)
+  - frontend: `vitest run --coverage` with thresholds defined in
+    `vite.config.ts` (lines / functions / statements ≥30%, branches ≥20%)
+- Linting and types: backend runs `ruff check app` + `mypy app` (config
+  in `backend/pyproject.toml`); frontend runs `eslint .` + `tsc --noEmit`
+  (`eslint.config.js` + `tsconfig.json`).
 
 ## Adding a new feature (typical workflow)
 
@@ -312,15 +394,19 @@ when adjusting how the multi-API router works):
 |---|---|
 | `Could not import module "main"` on `uvicorn` | Always use `app.main:app`, never `main:app` |
 | FK `ON DELETE CASCADE` not enforced | SQLite needs `PRAGMA foreign_keys=ON` per connection — set in `database.py` AND `conftest.py` |
+| `restore_backup` accepts a random `.db` and silently corrupts state | The route validates the upload against a fixed whitelist of 17 tables + `alembic_version` (see `REQUIRED_TABLES` in `app/api/v1/backup.py`). Any missing table → HTTP 400. Don't loosen this. |
 | Two records created in the same second have identical `updated_at`, breaking ordering tests | Use `strftime('%Y-%m-%d %H:%M:%f', 'now')` not `CURRENT_TIMESTAMP` |
 | Frontend `getByRole({ name: "重试" })` returns empty | AntD button text contains a space — use regex `/重\s?试/` |
+| `npm run lint` reports type errors | `lint` runs ESLint, not tsc. Use `npm run typecheck` for that. |
 | `vite build` fails with `Failed to resolve entry for "@tiptap/pm"` | Don't put `@tiptap/pm` in `manualChunks` (it's a subpath-only package) |
 | `MemoryRouter` / `BrowserRouter` test fails with `Cannot read properties of undefined (reading 'matches')` | `matchMedia` not mocked — extend `src/test/setup.ts` |
 | Test of store with module-level singleton fails | Use `vi.resetModules()` + dynamic `await import()` |
 | AI endpoint returns 503 in tests | Expected when no API key is set; tests should mock `app.ai.client.chat` or assert the 503 |
+| `resolve_profile` returns `None` in tests that bypass startup | The legacy migration now only runs in the FastAPI `startup` hook. In tests the engine never starts up — call `ensure_legacy_migrated(db)` explicitly in `conftest.py` or rely on `app.dependency_overrides` so the legacy keys are migrated at first use. |
 | Runtime `no such table: works` (or any other table) after a fresh checkout | `data/novel.db` was created without ever running migrations. Run `alembic upgrade head`; `scripts/start-backend.ps1` does this automatically (idempotent). |
 | Alembic `NotImplementedError: No support for ALTER of constraints in SQLite` / `ValueError: Constraint must have a name` when adding an FK to an existing table | Wrap the operation in `with op.batch_alter_table(...)` and call `batch.create_foreign_key("fk_<table>_<col>", "<target>", [...], [...], ondelete=...)` with an explicit name. See `0012_llm_log_profile.py`. |
 | New mutation that should also refresh the AI status banner / AIDrawer but doesn't | Invalidate `["settings", "ai-status"]` — react-query prefix-matches against the `settingKeys.all = ["settings"]` namespace used by `useAIStatus`. |
+| Adding an AI endpoint but the LLM log records the wrong URL | Use the `AIEndpoint` enum in `app/ai/endpoints.py`, not a string literal. |
 | React Router warnings about future flags | Harmless; ignore |
 
 ## What NOT to do
@@ -329,6 +415,10 @@ when adjusting how the multi-API router works):
   `app/database.py` — it floods uvicorn logs on every request.
 - Do not put business logic in route handlers beyond input validation +
   calling a service. Add a new file under `app/services/` if it grows.
+- Do not raise `HTTPException` directly from a service — raise a domain
+  exception (`ValueError`, `UnknownPromptError`, …) and let the route
+  convert. Keeps the pattern consistent across `ai_profiles` /
+  `ai_prompt_template` / `services`.
 - Do not delete or rename a migration — Alembic will break. If you need a
   schema change, write a new migration.
 - Do not add `console.log` or print statements and leave them in.
@@ -376,7 +466,14 @@ cd backend && Remove-Item data/novel.db -Force
 .venv\Scripts\alembic.exe upgrade head
 
 # Type-check frontend
+cd frontend && npm run typecheck
+
+# Lint frontend
 cd frontend && npm run lint
+
+# Lint + type-check backend
+cd backend && .venv\Scripts\ruff.exe check app
+cd backend && .venv\Scripts\mypy.exe app
 
 # Live smoke against running backend (replace 8014 if busy)
 .venv\Scripts\python.exe -c "import httpx; print(httpx.get('http://127.0.0.1:8000/api/v1/works').json())"

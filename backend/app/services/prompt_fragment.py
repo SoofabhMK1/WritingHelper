@@ -1,8 +1,6 @@
 """CRUD operations for PromptFragment."""
 from __future__ import annotations
 
-from typing import Optional
-
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -12,7 +10,7 @@ from app.schemas.prompt_fragment import PromptFragmentCreate, PromptFragmentUpda
 
 def list_fragments(
     db: Session,
-    q: Optional[str] = None,
+    q: str | None = None,
 ) -> list[PromptFragment]:
     stmt = select(PromptFragment)
     if q:
@@ -22,7 +20,7 @@ def list_fragments(
     return list(db.scalars(stmt).all())
 
 
-def get_fragment(db: Session, fragment_id: int) -> Optional[PromptFragment]:
+def get_fragment(db: Session, fragment_id: int) -> PromptFragment | None:
     return db.get(PromptFragment, fragment_id)
 
 
@@ -38,7 +36,7 @@ def create_fragment(
 
 def update_fragment(
     db: Session, fragment_id: int, payload: PromptFragmentUpdate
-) -> Optional[PromptFragment]:
+) -> PromptFragment | None:
     row = db.get(PromptFragment, fragment_id)
     if row is None:
         return None

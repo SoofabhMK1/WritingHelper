@@ -3,7 +3,6 @@ export interface PromptFragment {
   name: string;
   body: string;
   description: string | null;
-  tags_json: string | null;
   created_at: string;
   updated_at: string;
 }

@@ -39,17 +39,15 @@ interface FormValues {
   name: string;
   body: string;
   description?: string;
-  tags_json?: string;
 }
 
-const EMPTY_FORM: FormValues = { name: "", body: "", description: "", tags_json: "" };
+const EMPTY_FORM: FormValues = { name: "", body: "", description: "" };
 
 function toCreate(values: FormValues): PromptFragmentCreate {
   return {
     name: values.name.trim(),
     body: values.body,
     description: values.description?.trim() || null,
-    tags_json: values.tags_json?.trim() || null,
   };
 }
 
@@ -58,7 +56,6 @@ function toUpdate(values: FormValues): PromptFragmentUpdate {
     name: values.name.trim(),
     body: values.body,
     description: values.description?.trim() || null,
-    tags_json: values.tags_json?.trim() || null,
   };
 }
 
@@ -82,7 +79,6 @@ export function PromptFragments() {
         name: editing.name,
         body: editing.body,
         description: editing.description ?? "",
-        tags_json: editing.tags_json ?? "",
       });
     } else {
       form.setFieldsValue(EMPTY_FORM);
@@ -342,13 +338,6 @@ export function PromptFragments() {
           </Form.Item>
           <Form.Item name="description" label="说明">
             <Input placeholder="可选,用来记忆这个片段的用途" />
-          </Form.Item>
-          <Form.Item
-            name="tags_json"
-            label="标签 (JSON 数组字符串)"
-            extra='例如: ["style", "few-shot"]'
-          >
-            <Input placeholder='["标签1", "标签2"]' />
           </Form.Item>
         </Form>
       </Modal>

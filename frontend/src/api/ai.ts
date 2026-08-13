@@ -1,13 +1,6 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "./client";
 
-export interface AIStatus {
-  configured: boolean;
-  base_url: string;
-  model: string;
-  temperature: number;
-}
-
 export interface OutlineVolume {
   title: string;
   summary: string;

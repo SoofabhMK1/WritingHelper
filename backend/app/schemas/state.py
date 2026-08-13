@@ -1,17 +1,16 @@
 from datetime import datetime
-from typing import Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
 
 class StateBase(BaseModel):
     character_id: int
-    chapter_id: Optional[int] = None
+    chapter_id: int | None = None
     state_type: str = "status"
     state_key: str = Field(..., min_length=1, max_length=80)
     state_value: str = Field(..., min_length=1, max_length=500)
-    note: Optional[str] = None
-    captured_at: Optional[str] = Field(None, max_length=40)
+    note: str | None = None
+    captured_at: str | None = Field(None, max_length=40)
 
 
 class StateCreate(StateBase):
@@ -19,12 +18,12 @@ class StateCreate(StateBase):
 
 
 class StateUpdate(BaseModel):
-    chapter_id: Optional[int] = None
-    state_type: Optional[str] = None
-    state_key: Optional[str] = Field(None, min_length=1, max_length=80)
-    state_value: Optional[str] = Field(None, min_length=1, max_length=500)
-    note: Optional[str] = None
-    captured_at: Optional[str] = Field(None, max_length=40)
+    chapter_id: int | None = None
+    state_type: str | None = None
+    state_key: str | None = Field(None, min_length=1, max_length=80)
+    state_value: str | None = Field(None, min_length=1, max_length=500)
+    note: str | None = None
+    captured_at: str | None = Field(None, max_length=40)
 
 
 class StateOut(StateBase):

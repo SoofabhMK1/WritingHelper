@@ -187,6 +187,27 @@ class TestDefaultProfile:
         rb = client.get(f"/api/v1/ai/profiles/{b['id']}").json()
         assert rb["is_default"] is True
 
+    def test_demote_only_default_400(self, client):
+        """Only one profile exists; demoting it would leave zero defaults."""
+        a = self._create(client, "a", is_default=True)
+        r = client.put(f"/api/v1/ai/profiles/{a['id']}", json={"is_default": False})
+        assert r.status_code == 400
+        assert "默认" in r.json()["detail"]
+        # and the profile is still default
+        ra = client.get(f"/api/v1/ai/profiles/{a['id']}").json()
+        assert ra["is_default"] is True
+
+    def test_demote_default_with_successor_promotes_oldest(self, client):
+        """Demoting the current default with another profile present promotes it."""
+        a = self._create(client, "a", is_default=True)
+        b = self._create(client, "b")
+        r = client.put(f"/api/v1/ai/profiles/{a['id']}", json={"is_default": False})
+        assert r.status_code == 200
+        ra = client.get(f"/api/v1/ai/profiles/{a['id']}").json()
+        rb = client.get(f"/api/v1/ai/profiles/{b['id']}").json()
+        assert ra["is_default"] is False
+        assert rb["is_default"] is True
+
 
 # =============================================================================
 # Assignments
@@ -310,6 +331,26 @@ class TestLegacyMigration:
         body = r.json()
         # legacy key stays — migration only runs when profiles table is empty
         assert body["default_profile_name"] == "user"
+
+    def test_legacy_temperature_garbage_falls_back_to_default(
+        self, client, db_session
+    ):
+        """Non-numeric ``ai.temperature`` is silently replaced by 0.7
+        (per ``_maybe_migrate_legacy``'s ValueError guard) and migration
+        completes rather than crashing."""
+        set_setting(db_session, KEY_API_KEY, "sk-legacy")
+        set_setting(db_session, KEY_BASE_URL, "https://api.example.com/v1")
+        set_setting(db_session, KEY_MODEL, "x")
+        set_setting(db_session, KEY_TEMPERATURE, "hot")
+        db_session.commit()
+
+        r = client.get("/api/v1/ai/status")
+        assert r.status_code == 200
+        assert r.json()["default_profile_id"] is not None
+
+        profile = resolve_profile(db_session)
+        assert profile is not None
+        assert profile.temperature == 0.7, "garbage temperature → 0.7 fallback"
 
 
 # =============================================================================

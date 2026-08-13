@@ -1,25 +1,24 @@
 from datetime import datetime
-from typing import Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
 
 class CharacterBase(BaseModel):
     name: str = Field(..., min_length=1, max_length=120)
-    aliases: Optional[str] = Field(None, max_length=500)
+    aliases: str | None = Field(None, max_length=500)
     role: str = "side"
-    age: Optional[int] = Field(None, ge=0, le=9999)
-    gender: Optional[str] = Field(None, max_length=40)
-    appearance: Optional[str] = None
-    personality: Optional[str] = None
-    background: Optional[str] = None
-    motivation: Optional[str] = None
-    arc: Optional[str] = None
-    speech_style: Optional[str] = None
-    ability: Optional[str] = None
-    occupation: Optional[str] = Field(None, max_length=120)
-    notes: Optional[str] = None
-    avatar: Optional[str] = Field(None, max_length=500)
+    age: int | None = Field(None, ge=0, le=9999)
+    gender: str | None = Field(None, max_length=40)
+    appearance: str | None = None
+    personality: str | None = None
+    background: str | None = None
+    motivation: str | None = None
+    arc: str | None = None
+    speech_style: str | None = None
+    ability: str | None = None
+    occupation: str | None = Field(None, max_length=120)
+    notes: str | None = None
+    avatar: str | None = Field(None, max_length=500)
 
 
 class CharacterCreate(CharacterBase):
@@ -27,21 +26,21 @@ class CharacterCreate(CharacterBase):
 
 
 class CharacterUpdate(BaseModel):
-    name: Optional[str] = Field(None, min_length=1, max_length=120)
-    aliases: Optional[str] = Field(None, max_length=500)
-    role: Optional[str] = None
-    age: Optional[int] = Field(None, ge=0, le=9999)
-    gender: Optional[str] = Field(None, max_length=40)
-    appearance: Optional[str] = None
-    personality: Optional[str] = None
-    background: Optional[str] = None
-    motivation: Optional[str] = None
-    arc: Optional[str] = None
-    speech_style: Optional[str] = None
-    ability: Optional[str] = None
-    occupation: Optional[str] = Field(None, max_length=120)
-    notes: Optional[str] = None
-    avatar: Optional[str] = Field(None, max_length=500)
+    name: str | None = Field(None, min_length=1, max_length=120)
+    aliases: str | None = Field(None, max_length=500)
+    role: str | None = None
+    age: int | None = Field(None, ge=0, le=9999)
+    gender: str | None = Field(None, max_length=40)
+    appearance: str | None = None
+    personality: str | None = None
+    background: str | None = None
+    motivation: str | None = None
+    arc: str | None = None
+    speech_style: str | None = None
+    ability: str | None = None
+    occupation: str | None = Field(None, max_length=120)
+    notes: str | None = None
+    avatar: str | None = Field(None, max_length=500)
 
 
 class CharacterOut(CharacterBase):

@@ -6,11 +6,12 @@ base_url / api_key / model to use.
 from __future__ import annotations
 
 import json
-from typing import Any, Optional
+from typing import Any
 
 from sqlalchemy.orm import Session
 
 from app.models.app_setting import AppSetting
+from app.schemas.setting import SettingOut
 
 KEY_API_KEY = "ai.api_key"
 KEY_BASE_URL = "ai.base_url"
@@ -21,7 +22,7 @@ KEY_TEMPERATURE = "ai.temperature"
 SECRET_KEYS = {KEY_API_KEY}
 
 
-def get_setting(db: Session, key: str, default: Optional[str] = None) -> Optional[str]:
+def get_setting(db: Session, key: str, default: str | None = None) -> str | None:
     row = db.get(AppSetting, key)
     if row is None:
         return default
@@ -51,16 +52,18 @@ def delete_setting(db: Session, key: str) -> bool:
     return True
 
 
-def list_settings(db: Session) -> list[dict]:
+def list_settings(db: Session) -> list[SettingOut]:
     """Return all settings; secret values are masked (returned as empty)."""
     rows = db.query(AppSetting).order_by(AppSetting.key).all()
     return [
-        {
-            "key": r.key,
-            "value": "" if r.key in SECRET_KEYS else r.value,
-            "is_secret": r.key in SECRET_KEYS,
-            "is_set": bool(r.value),
-            "updated_at": r.updated_at.isoformat() if r.updated_at else None,
-        }
+        SettingOut.model_validate(
+            {
+                "key": r.key,
+                "value": "" if r.key in SECRET_KEYS else r.value,
+                "is_secret": r.key in SECRET_KEYS,
+                "is_set": bool(r.value),
+                "updated_at": r.updated_at.isoformat() if r.updated_at else None,
+            }
+        )
         for r in rows
     ]

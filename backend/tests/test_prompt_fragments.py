@@ -17,7 +17,6 @@ class TestPromptFragments:
         assert data["name"] == "风格指南"
         assert data["body"] == "保持冷硬克制"
         assert data["description"] is None
-        assert data["tags_json"] is None
         assert "id" in data
         assert "created_at" in data
         assert "updated_at" in data
@@ -29,13 +28,11 @@ class TestPromptFragments:
                 "name": "JSON 示例",
                 "body": '{"items": [...]}',
                 "description": "用作 few-shot 的 JSON 格式样例",
-                "tags_json": '["json", "few-shot"]',
             },
         )
         assert r.status_code == 201
         data = r.json()
         assert data["description"] == "用作 few-shot 的 JSON 格式样例"
-        assert data["tags_json"] == '["json", "few-shot"]'
 
     def test_create_empty_name_422(self, client):
         r = client.post("/api/v1/prompt-fragments", json={"name": "", "body": "x"})

@@ -1,4 +1,3 @@
-from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
@@ -11,7 +10,7 @@ from app.schemas.work import WorkCreate, WorkOut, WorkUpdate
 router = APIRouter(prefix="/works", tags=["works"])
 
 
-@router.get("", response_model=List[WorkOut])
+@router.get("", response_model=list[WorkOut])
 def list_works(
     q: str | None = None,
     status: str | None = None,

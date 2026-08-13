@@ -1,6 +1,6 @@
 import { Button, Input, Modal, Space, Typography, message } from "antd";
-import { ArrowLeftOutlined } from "@ant-design/icons";
 import { useState } from "react";
+import { ArrowLeftOutlined } from "@ant-design/icons";
 import { useNavigate } from "react-router-dom";
 import {
   useCreateVolume,
@@ -16,12 +16,7 @@ import {
 } from "@/api/chapters";
 import type { Chapter, Volume } from "@/types";
 import { ChapterList } from "./ChapterList";
-import { AIDrawer } from "./AIDrawer";
-
-export type AIDrawerTarget =
-  | { kind: "volume"; workId: number; volume: Volume }
-  | { kind: "chapter"; workId: number; chapter: Chapter }
-  | null;
+import { useAIDrawer } from "@/store/aiDrawer";
 
 const EMPTY_VOLUME: Pick<Volume, "title" | "summary" | "order_num" | "status" | "target_words"> = {
   title: "",
@@ -44,11 +39,18 @@ export function Outline({ workId }: { workId: number }) {
   const updateChapter = useUpdateChapter(workId);
   const deleteChapter = useDeleteChapter(workId);
 
-  const [aiTarget, setAiTarget] = useState<AIDrawerTarget>(null);
+  const openAIVolume = useAIDrawer((s) => s.openVolume);
+  const openAIChapter = useAIDrawer((s) => s.openChapter);
+
   const [editing, setEditing] = useState<Volume | null>(null);
   const [draft, setDraft] = useState(EMPTY_VOLUME);
+  const [formOpen, setFormOpen] = useState(false);
 
   const isLoading = volsLoading || chsLoading;
+
+  if (isLoading) {
+    return <Typography.Text type="secondary">加载中…</Typography.Text>;
+  }
 
   // group chapters by volume (null = no volume / free chapters)
   const chaptersByVolume = new Map<number | null, Chapter[]>();
@@ -131,8 +133,6 @@ export function Outline({ workId }: { workId: number }) {
     message.success("已删除章节");
   }
 
-  const [formOpen, setFormOpen] = useState(false);
-
   return (
     <div>
       <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 16 }}>
@@ -152,9 +152,7 @@ export function Outline({ workId }: { workId: number }) {
         </Space>
       </div>
 
-      {isLoading ? (
-        <Typography.Text type="secondary">加载中…</Typography.Text>
-      ) : volumes.length === 0 ? (
+      {volumes.length === 0 ? (
         <Typography.Paragraph type="secondary">
           还没有任何卷。点击"新建卷"开始搭建大纲。
         </Typography.Paragraph>
@@ -168,9 +166,9 @@ export function Outline({ workId }: { workId: number }) {
               workId={workId}
               onEditVolume={() => openEditVolume(v)}
               onDeleteVolume={() => onDeleteVolume(v)}
-              onAIVolume={() => setAiTarget({ kind: "volume", workId, volume: v })}
+              onAIVolume={() => openAIVolume(workId, v)}
               onAddChapter={() => onNewChapter(v.id)}
-              onAIChapter={(c) => setAiTarget({ kind: "chapter", workId, chapter: c })}
+              onAIChapter={(c) => openAIChapter(workId, c)}
               onMoveChapter={onMoveChapter}
               onDeleteChapter={onDeleteChapter}
             />
@@ -183,7 +181,7 @@ export function Outline({ workId }: { workId: number }) {
               chapters={chaptersByVolume.get(null) ?? []}
               workId={workId}
               onAddChapter={() => onNewChapter(null)}
-              onAIChapter={(c) => setAiTarget({ kind: "chapter", workId, chapter: c })}
+              onAIChapter={(c) => openAIChapter(workId, c)}
               onMoveChapter={onMoveChapter}
               onDeleteChapter={onDeleteChapter}
             />
@@ -232,8 +230,6 @@ export function Outline({ workId }: { workId: number }) {
           </div>
         </Space>
       </Modal>
-
-      <AIDrawer target={aiTarget} onClose={() => setAiTarget(null)} />
     </div>
   );
 }

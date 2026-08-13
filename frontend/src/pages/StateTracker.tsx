@@ -19,6 +19,7 @@ import {
   Typography,
   message,
 } from "antd";
+import type { FormInstance } from "antd";
 import {
   ArrowLeftOutlined,
   DeleteOutlined,
@@ -217,7 +218,7 @@ function StateFormFields({
   characters,
   chapters,
 }: {
-  form: any;
+  form: FormInstance<StateCreate>;
   characters: { id: number; name: string }[];
   chapters: { id: number; title: string }[];
 }) {

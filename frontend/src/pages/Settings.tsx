@@ -1,5 +1,6 @@
 import { Card, Empty, Space, Typography } from "antd";
 import { KeyOutlined } from "@ant-design/icons";
+import type { ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAIStatus } from "@/api/settings";
 
@@ -9,7 +10,7 @@ interface SettingItem {
   key: string;
   title: string;
   description: string;
-  icon: React.ReactNode;
+  icon: ReactNode;
   to: string;
 }
 

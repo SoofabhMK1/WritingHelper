@@ -7,7 +7,6 @@ when no profile is configured.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Optional
 
 from sqlalchemy.orm import Session
 
@@ -21,8 +20,8 @@ class AIConfig:
     base_url: str
     model: str
     temperature: float = 0.7
-    profile_id: Optional[int] = None
-    profile_name: Optional[str] = None
+    profile_id: int | None = None
+    profile_name: str | None = None
     provider: str = ""
 
     @property
@@ -31,8 +30,8 @@ class AIConfig:
 
 
 def resolve_config(
-    db: Optional[Session] = None,
-    prompt_name: Optional[str] = None,
+    db: Session | None = None,
+    prompt_name: str | None = None,
 ) -> AIConfig:
     """Pick the right config for ``prompt_name``.
 
@@ -92,11 +91,11 @@ def chat(
     system: str,
     user: str,
     *,
-    model: Optional[str] = None,
-    temperature: Optional[float] = None,
+    model: str | None = None,
+    temperature: float | None = None,
     json_mode: bool = False,
-    prompt_name: Optional[str] = None,
-    cfg: Optional[AIConfig] = None,
+    prompt_name: str | None = None,
+    cfg: AIConfig | None = None,
 ) -> str:
     """One-shot chat completion. Returns the assistant text content.
 

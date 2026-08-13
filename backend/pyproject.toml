@@ -1,0 +1,42 @@
+[tool.ruff]
+target-version = "py310"
+line-length = 100
+
+[tool.ruff.lint]
+# Default rule set: pycodestyle (E), Pyflakes (F), isort (I), pyupgrade (UP),
+# bugbear (B), comprehensions (C4), simplify (SIM).
+select = ["E", "F", "I", "UP", "B", "C4", "SIM"]
+ignore = [
+    "E501",  # line length (handled by formatter)
+    "B008",  # do not perform function calls in argument defaults
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["app", "tests"]
+
+[tool.mypy]
+python_version = "3.10"
+# Be permissive: this codebase predates mypy. Adding strict types now would
+# mean hundreds of # type:ignore comments. Track growth over time.
+ignore_missing_imports = true
+warn_unused_ignores = true
+warn_redundant_casts = true
+no_implicit_optional = true
+show_error_codes = true
+follow_imports_for_stubs = true
+
+[[tool.mypy.overrides]]
+module = "tests.*"
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+# Forward-reference strings ("Volume", "Chapter" etc.) are a SQLAlchemy
+# idiom for late-bound relationship resolution. Mypy can't follow them
+# without a stubs file; accept them here.
+module = "app.models.*"
+disable_error_code = ["name-defined"]
+
+[[tool.mypy.overrides]]
+# SQLAlchemy Result API differences vs. what mypy expects.
+module = "app.services.*"
+disable_error_code = ["attr-defined", "operator"]

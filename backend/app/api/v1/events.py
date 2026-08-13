@@ -1,15 +1,18 @@
-from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, selectinload
 
+from app.api.v1.deps import (
+    get_scoped_or_404,
+    get_work_or_404,
+    validate_child_belongs_to_work,
+)
 from app.database import get_db
-from app.models.character import Character
 from app.models.chapter import Chapter
+from app.models.character import Character
 from app.models.event import Event, EventCharacter, EventLink
-from app.models.work import Work
 from app.schemas.event import (
     EventCharacterIn,
     EventCharacterOut,
@@ -24,48 +27,32 @@ from app.schemas.event import (
 router = APIRouter(prefix="/works/{work_id}/events", tags=["events"])
 
 
-def _get_work_or_404(work_id: int, db: Session) -> Work:
-    work = db.get(Work, work_id)
-    if not work:
-        raise HTTPException(status_code=404, detail="Work not found")
-    return work
-
-
-def _get_event_or_404(event_id: int, work_id: int, db: Session) -> Event:
-    ev = db.get(Event, event_id)
-    if not ev or ev.work_id != work_id:
-        raise HTTPException(status_code=404, detail="Event not found")
-    return ev
-
-
-def _validate_chapter(chapter_id: Optional[int], work_id: int, db: Session) -> None:
-    if chapter_id is None:
-        return
-    ch = db.get(Chapter, chapter_id)
-    if not ch or ch.work_id != work_id:
-        raise HTTPException(status_code=400, detail="chapter_id does not belong to work")
+def _get_event_or_404(db: Session, work_id: int, event_id: int) -> Event:
+    return get_scoped_or_404(
+        db, model=Event, work_id=work_id, child_id=event_id, label="Event"
+    )
 
 
 # =============================================================================
 # Events CRUD
 # =============================================================================
 
-@router.get("", response_model=List[EventOut])
+@router.get("", response_model=list[EventOut])
 def list_events(
     work_id: int,
-    event_type: Optional[str] = Query(None),
-    chapter_id: Optional[int] = Query(None),
-    event_status: Optional[str] = Query(None, alias="status"),
+    event_type: str | None = Query(None),
+    chapter_id: int | None = Query(None),
+    status: str | None = Query(None, alias="status"),
     db: Session = Depends(get_db),
 ):
-    _get_work_or_404(work_id, db)
+    get_work_or_404(db, work_id)
     stmt = select(Event).where(Event.work_id == work_id)
     if event_type:
         stmt = stmt.where(Event.event_type == event_type)
     if chapter_id is not None:
         stmt = stmt.where(Event.chapter_id == chapter_id)
-    if event_status:
-        stmt = stmt.where(Event.status == event_status)
+    if status:
+        stmt = stmt.where(Event.status == status)
     # 按故事内时间(文本,可能为空)排序,空置末
     stmt = stmt.order_by(Event.story_time.is_(None), Event.story_time, Event.id)
     return list(db.scalars(stmt).all())
@@ -77,8 +64,10 @@ def create_event(
     payload: EventCreate,
     db: Session = Depends(get_db),
 ):
-    _get_work_or_404(work_id, db)
-    _validate_chapter(payload.chapter_id, work_id, db)
+    get_work_or_404(db, work_id)
+    validate_child_belongs_to_work(
+        db, model=Chapter, work_id=work_id, child_id=payload.chapter_id, label="chapter_id"
+    )
     ev = Event(work_id=work_id, **payload.model_dump())
     db.add(ev)
     db.commit()
@@ -112,9 +101,11 @@ def get_event(work_id: int, event_id: int, db: Session = Depends(get_db)):
     )
     return EventWithRelations(
         **EventOut.model_validate(ev).model_dump(),
-        character_links=[EventCharacterOut.model_validate(l) for l in ev.character_links],
-        links_out=[EventLinkOut.model_validate(l) for l in out_links],
-        links_in=[EventLinkOut.model_validate(l) for l in in_links],
+        character_links=[
+            EventCharacterOut.model_validate(link) for link in ev.character_links
+        ],
+        links_out=[EventLinkOut.model_validate(link) for link in out_links],
+        links_in=[EventLinkOut.model_validate(link) for link in in_links],
     )
 
 
@@ -125,10 +116,12 @@ def update_event(
     payload: EventUpdate,
     db: Session = Depends(get_db),
 ):
-    ev = _get_event_or_404(event_id, work_id, db)
+    ev = _get_event_or_404(db, work_id, event_id)
     data = payload.model_dump(exclude_unset=True)
     if "chapter_id" in data:
-        _validate_chapter(data["chapter_id"], work_id, db)
+        validate_child_belongs_to_work(
+            db, model=Chapter, work_id=work_id, child_id=data["chapter_id"], label="chapter_id"
+        )
     for k, v in data.items():
         setattr(ev, k, v)
     db.commit()
@@ -138,7 +131,7 @@ def update_event(
 
 @router.delete("/{event_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_event(work_id: int, event_id: int, db: Session = Depends(get_db)):
-    ev = _get_event_or_404(event_id, work_id, db)
+    ev = _get_event_or_404(db, work_id, event_id)
     db.delete(ev)
     db.commit()
     return None
@@ -159,10 +152,14 @@ def add_character_to_event(
     payload: EventCharacterIn,
     db: Session = Depends(get_db),
 ):
-    ev = _get_event_or_404(event_id, work_id, db)
-    ch = db.get(Character, payload.character_id)
-    if not ch or ch.work_id != work_id:
-        raise HTTPException(status_code=400, detail="character_id does not belong to work")
+    ev = _get_event_or_404(db, work_id, event_id)
+    validate_child_belongs_to_work(
+        db,
+        model=Character,
+        work_id=work_id,
+        child_id=payload.character_id,
+        label="character_id",
+    )
     link = EventCharacter(
         event_id=ev.id,
         character_id=payload.character_id,
@@ -174,7 +171,9 @@ def add_character_to_event(
         db.commit()
     except IntegrityError:
         db.rollback()
-        raise HTTPException(status_code=409, detail="Character already linked to this event")
+        raise HTTPException(
+            status_code=409, detail="Character already linked to this event"
+        ) from None
     db.refresh(link)
     return link
 
@@ -203,10 +202,10 @@ def remove_character_from_event(
 
 @router.get(
     "/{event_id}/links",
-    response_model=List[EventLinkOut],
+    response_model=list[EventLinkOut],
 )
 def list_event_links(work_id: int, event_id: int, db: Session = Depends(get_db)):
-    _get_event_or_404(event_id, work_id, db)
+    _get_event_or_404(db, work_id, event_id)
     stmt = (
         select(EventLink)
         .where(EventLink.work_id == work_id)
@@ -231,8 +230,13 @@ def add_event_link(
 ):
     if payload.source_event_id == payload.target_event_id:
         raise HTTPException(status_code=400, detail="source and target must differ")
-    _get_event_or_404(payload.source_event_id, work_id, db)
-    _get_event_or_404(payload.target_event_id, work_id, db)
+    if event_id != payload.source_event_id and event_id != payload.target_event_id:
+        raise HTTPException(
+            status_code=400,
+            detail="URL event_id must match source_event_id or target_event_id",
+        )
+    _get_event_or_404(db, work_id, payload.source_event_id)
+    _get_event_or_404(db, work_id, payload.target_event_id)
     link = EventLink(
         work_id=work_id,
         source_event_id=payload.source_event_id,
@@ -245,7 +249,7 @@ def add_event_link(
         db.commit()
     except IntegrityError:
         db.rollback()
-        raise HTTPException(status_code=409, detail="Link already exists")
+        raise HTTPException(status_code=409, detail="Link already exists") from None
     db.refresh(link)
     return link
 

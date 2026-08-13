@@ -1,5 +1,4 @@
 from enum import Enum
-from typing import Optional
 
 from sqlalchemy import ForeignKey, Index, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
@@ -20,16 +19,16 @@ class Foreshadowing(Base, TimestampMixin):
     work_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("works.id", ondelete="CASCADE"), nullable=False, index=True
     )
-    chapter_id: Mapped[Optional[int]] = mapped_column(
+    chapter_id: Mapped[int | None] = mapped_column(
         Integer, ForeignKey("chapters.id", ondelete="CASCADE"), nullable=True, index=True
     )
     title: Mapped[str] = mapped_column(String(200), nullable=False)
-    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    quote: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    planted_chapter_id: Mapped[Optional[int]] = mapped_column(
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    quote: Mapped[str | None] = mapped_column(Text, nullable=True)
+    planted_chapter_id: Mapped[int | None] = mapped_column(
         Integer, ForeignKey("chapters.id", ondelete="SET NULL"), nullable=True
     )
-    payoff_chapter_id: Mapped[Optional[int]] = mapped_column(
+    payoff_chapter_id: Mapped[int | None] = mapped_column(
         Integer, ForeignKey("chapters.id", ondelete="SET NULL"), nullable=True
     )
     status: Mapped[str] = mapped_column(

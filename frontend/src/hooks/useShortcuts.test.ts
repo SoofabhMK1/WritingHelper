@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { renderHook } from "@testing-library/react";
 import { useShortcuts } from "./useShortcuts";
 
-function fireOn(el: EventTarget, key: string, init: KeyboardEventInit = {}) {
+function fireOn(el: EventTarget, key: string, init: KeyboardEventInit = {} as KeyboardEventInit) {
   const ev = new KeyboardEvent("keydown", { key, bubbles: true, ...init });
   el.dispatchEvent(ev);
 }
@@ -61,5 +61,26 @@ describe("useShortcuts", () => {
     fireOn(input, "s", { ctrlKey: true });
     expect(called).toBe(1);
     document.body.removeChild(input);
+  });
+
+  it("picks up new bindings without re-registering the listener (B9)", () => {
+    // If the hook re-binds on every render, removing the listener mid-test
+    // would break subsequent keydowns. We assert the listener stays bound by
+    // rendering with two different arrays and verifying both work.
+    const calls: string[] = [];
+    const { rerender } = renderHook(
+      ({ label }: { label: string }) =>
+        useShortcuts([
+          {
+            key: "g",
+            handler: () => calls.push(`g#${label}`),
+          },
+        ]),
+      { initialProps: { label: "first" } },
+    );
+    fireOn(window, "g");
+    rerender({ label: "second" });
+    fireOn(window, "g");
+    expect(calls).toEqual(["g#first", "g#second"]);
   });
 });

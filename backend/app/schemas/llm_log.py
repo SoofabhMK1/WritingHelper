@@ -1,8 +1,7 @@
 from datetime import datetime
-from typing import List, Literal, Optional
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
-
 
 # ============================================================================
 # Status enum
@@ -22,16 +21,16 @@ class LlmRequestLogSummary(BaseModel):
     id: int
     prompt_name: str
     endpoint: str
-    work_id: Optional[int] = None
+    work_id: int | None = None
     status: LlmLogStatus
     duration_ms: int
-    model: Optional[str] = None
-    provider: Optional[str] = None
-    profile_id: Optional[int] = None
-    prompt_assembly_id: Optional[int] = None
+    model: str | None = None
+    provider: str | None = None
+    profile_id: int | None = None
+    prompt_assembly_id: int | None = None
     user_preview: str = ""
     response_preview: str = ""
-    error: Optional[str] = None
+    error: str | None = None
     created_at: datetime
 
 
@@ -46,17 +45,17 @@ class LlmRequestLogDetail(BaseModel):
     id: int
     prompt_name: str
     endpoint: str
-    work_id: Optional[int] = None
+    work_id: int | None = None
     system: str
     user: str
-    response: Optional[str] = None
+    response: str | None = None
     status: LlmLogStatus
-    error: Optional[str] = None
+    error: str | None = None
     duration_ms: int
-    model: Optional[str] = None
-    provider: Optional[str] = None
-    profile_id: Optional[int] = None
-    prompt_assembly_id: Optional[int] = None
+    model: str | None = None
+    provider: str | None = None
+    profile_id: int | None = None
+    prompt_assembly_id: int | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -67,7 +66,7 @@ class LlmRequestLogDetail(BaseModel):
 
 
 class LlmRequestLogList(BaseModel):
-    items: List[LlmRequestLogSummary]
+    items: list[LlmRequestLogSummary]
     total: int
     page: int = Field(1, ge=1)
     page_size: int = Field(20, ge=1, le=200)

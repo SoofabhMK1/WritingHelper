@@ -12,7 +12,6 @@ describe("PromptFragment types", () => {
       name: "风格指南",
       body: "保持冷硬克制",
       description: null,
-      tags_json: null,
       created_at: "2026-08-12T00:00:00",
       updated_at: "2026-08-12T00:00:00",
     };
@@ -25,7 +24,6 @@ describe("PromptFragment types", () => {
       name: string;
       body: string;
       description: string | null;
-      tags_json: string | null;
     }>();
   });
 

@@ -22,7 +22,6 @@ export default defineConfig({
   },
   build: {
     sourcemap: false,
-    chunkSizeWarningLimit: 1500,
     rollupOptions: {
       output: {
         manualChunks: {
@@ -38,5 +37,24 @@ export default defineConfig({
     globals: true,
     setupFiles: ["./src/test/setup.ts"],
     css: false,
+    coverage: {
+      provider: "v8",
+      reporter: ["text", "lcov"],
+      // Thresholds intentionally low — this is a coverage floor, not a
+      // target. Tighten over time as the test suite expands.
+      thresholds: {
+        lines: 30,
+        functions: 30,
+        branches: 20,
+        statements: 30,
+      },
+      include: ["src/**/*.{ts,tsx}"],
+      exclude: [
+        "src/**/main.tsx",
+        "src/**/*.test.{ts,tsx}",
+        "src/test/**",
+        "src/types/**",
+      ],
+    },
   },
 });

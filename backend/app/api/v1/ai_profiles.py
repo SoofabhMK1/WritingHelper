@@ -32,7 +32,6 @@ from app.services.ai_profiles import (
     update_profile,
 )
 
-
 router = APIRouter(prefix="/ai", tags=["ai"])
 
 
@@ -84,20 +83,28 @@ def update_ai_profile(
     profile = get_profile(db, profile_id)
     if profile is None:
         raise HTTPException(status_code=404, detail="Profile not found")
-    if payload.name and payload.name != profile.name:
-        if get_profile_by_name(db, payload.name) is not None:
-            raise HTTPException(status_code=400, detail=f"配置名称已存在: {payload.name}")
-    updated = update_profile(
-        db,
-        profile_id,
-        name=payload.name,
-        provider=payload.provider,
-        base_url=payload.base_url,
-        model=payload.model,
-        temperature=payload.temperature,
-        api_key=payload.api_key,
-        is_default=payload.is_default,
-    )
+    if (
+        payload.name
+        and payload.name != profile.name
+        and get_profile_by_name(db, payload.name) is not None
+    ):
+        raise HTTPException(status_code=400, detail=f"配置名称已存在: {payload.name}")
+    try:
+        updated = update_profile(
+            db,
+            profile_id,
+            name=payload.name,
+            provider=payload.provider,
+            base_url=payload.base_url,
+            model=payload.model,
+            temperature=payload.temperature,
+            api_key=payload.api_key,
+            is_default=payload.is_default,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    if updated is None:
+        raise HTTPException(status_code=404, detail="Profile not found")
     return profile_to_out(updated)
 
 

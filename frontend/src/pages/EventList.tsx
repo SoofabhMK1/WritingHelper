@@ -209,12 +209,16 @@ export function EventList({ workId }: { workId: number }) {
                           {ev.story_time || "—"}
                         </Tag>
                       </Tooltip>
-                      <span
+                      <a
                         style={{ flex: 1, cursor: "pointer", color: "#1677ff" }}
-                        onClick={() => navigate(`/works/${workId}/events/${ev.id}`)}
+                        onClick={(e) => {
+                          e.preventDefault();
+                          navigate(`/works/${workId}/events/${ev.id}`);
+                        }}
+                        href={`/works/${workId}/events/${ev.id}`}
                       >
                         {ev.title}
-                      </span>
+                      </a>
                       {ev.location && (
                         <Typography.Text type="secondary" style={{ fontSize: 12 }}>
                           <EnvironmentOutlined /> {ev.location}
@@ -331,6 +335,8 @@ function TimelineView({
         {ordered.map((ev) => (
           <div
             key={ev.id}
+            role="button"
+            tabIndex={0}
             style={{
               position: "relative",
               cursor: "pointer",
@@ -339,6 +345,12 @@ function TimelineView({
               borderRadius: 4,
             }}
             onClick={() => onOpen(ev.id)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                onOpen(ev.id);
+              }
+            }}
           >
             <div
               style={{

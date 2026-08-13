@@ -1,10 +1,9 @@
-from typing import Generator
+from collections.abc import Generator
 
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.config import settings
-from app.models.base import Base
 
 engine = create_engine(
     settings.alembic_database_url,
