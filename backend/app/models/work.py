@@ -1,6 +1,6 @@
 from enum import Enum
 
-from sqlalchemy import Integer, String, Text
+from sqlalchemy import JSON, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base, TimestampMixin
@@ -34,3 +34,16 @@ class Work(Base, TimestampMixin):
     )
     cover: Mapped[str | None] = mapped_column(String(500), nullable=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    story_seed: Mapped[str | None] = mapped_column(Text, nullable=True)
+    core_conflict: Mapped[str | None] = mapped_column(Text, nullable=True)
+    protagonist_goal: Mapped[str | None] = mapped_column(Text, nullable=True)
+    themes: Mapped[list | None] = mapped_column(JSON, nullable=True)
+    era: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    setting: Mapped[str | None] = mapped_column(Text, nullable=True)
+    world_rules: Mapped[str | None] = mapped_column(Text, nullable=True)
+    pace: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    realism: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    prose: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    moods: Mapped[list | None] = mapped_column(JSON, nullable=True)
+    length_type: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    stage: Mapped[str | None] = mapped_column(String(40), nullable=True)

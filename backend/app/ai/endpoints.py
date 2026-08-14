@@ -16,4 +16,5 @@ class AIEndpoint(str, Enum):
     CHAT = "/ai/chat"
     CONTINUE = "/ai/suggest/continue"
     EXPAND = "/ai/suggest/expand"
+    COMPLETION = "/ai/suggest/completion"
     UNKNOWN = ""

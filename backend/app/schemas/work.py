@@ -14,6 +14,19 @@ class WorkBase(BaseModel):
     status: str = "draft"
     cover: str | None = None
     notes: str | None = None
+    story_seed: str | None = None
+    core_conflict: str | None = None
+    protagonist_goal: str | None = None
+    themes: list[str] | None = None
+    era: str | None = Field(None, max_length=40)
+    setting: str | None = None
+    world_rules: str | None = None
+    pace: int | None = Field(None, ge=1, le=10)
+    realism: int | None = Field(None, ge=1, le=10)
+    prose: int | None = Field(None, ge=1, le=10)
+    moods: list[str] | None = None
+    length_type: str | None = Field(None, max_length=20)
+    stage: str | None = Field(None, max_length=40)
 
 
 class WorkCreate(WorkBase):
@@ -32,6 +45,19 @@ class WorkUpdate(BaseModel):
     status: str | None = None
     cover: str | None = None
     notes: str | None = None
+    story_seed: str | None = None
+    core_conflict: str | None = None
+    protagonist_goal: str | None = None
+    themes: list[str] | None = None
+    era: str | None = Field(None, max_length=40)
+    setting: str | None = None
+    world_rules: str | None = None
+    pace: int | None = Field(None, ge=1, le=10)
+    realism: int | None = Field(None, ge=1, le=10)
+    prose: int | None = Field(None, ge=1, le=10)
+    moods: list[str] | None = None
+    length_type: str | None = Field(None, max_length=20)
+    stage: str | None = Field(None, max_length=40)
 
 
 class WorkOut(WorkBase):

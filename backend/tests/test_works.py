@@ -71,6 +71,55 @@ class TestCreateWork:
         assert body["genre"] == "玄幻"
         assert body["target_words"] == 1000000
 
+    def test_full_with_creation_fields(self, client):
+        r = client.post(
+            "/api/v1/works",
+            json=_payload(
+                story_seed="一个年轻干部来到偏远乡镇。",
+                core_conflict="理想主义者对抗隐藏的权力网络。",
+                protagonist_goal="改变家乡",
+                themes=["权力", "人性"],
+                era="现代",
+                setting="虚构的现代中国山区县城。",
+                world_rules="整体世界基本现实。",
+                pace=3,
+                realism=8,
+                prose=4,
+                moods=["压抑", "克制"],
+                length_type="长篇",
+                stage="只有灵感",
+            ),
+        )
+        assert r.status_code == 201
+        body = r.json()
+        assert body["story_seed"] == "一个年轻干部来到偏远乡镇。"
+        assert body["core_conflict"] == "理想主义者对抗隐藏的权力网络。"
+        assert body["protagonist_goal"] == "改变家乡"
+        assert body["themes"] == ["权力", "人性"]
+        assert body["era"] == "现代"
+        assert body["setting"] == "虚构的现代中国山区县城。"
+        assert body["world_rules"] == "整体世界基本现实。"
+        assert body["pace"] == 3
+        assert body["realism"] == 8
+        assert body["prose"] == 4
+        assert body["moods"] == ["压抑", "克制"]
+        assert body["length_type"] == "长篇"
+        assert body["stage"] == "只有灵感"
+
+    def test_creation_fields_default_null(self, client):
+        r = client.post("/api/v1/works", json={"title": "测试"})
+        body = r.json()
+        assert body["story_seed"] is None
+        assert body["themes"] is None
+        assert body["pace"] is None
+        assert body["moods"] is None
+        assert body["length_type"] is None
+        assert body["stage"] is None
+
+    def test_pace_out_of_range_422(self, client):
+        assert client.post("/api/v1/works", json={"title": "x", "pace": 0}).status_code == 422
+        assert client.post("/api/v1/works", json={"title": "x", "pace": 11}).status_code == 422
+
     def test_missing_title_422(self, client):
         r = client.post("/api/v1/works", json={"genre": "玄幻"})
         assert r.status_code == 422
@@ -137,6 +186,35 @@ class TestUpdateWork:
         r = client.put(f"/api/v1/works/{wid}", json={"status": "unknown_state"})
         assert r.status_code == 200
         assert r.json()["status"] == "unknown_state"
+
+    def test_update_creation_fields(self, client):
+        wid = client.post("/api/v1/works", json={"title": "A"}).json()["id"]
+        r = client.put(
+            f"/api/v1/works/{wid}",
+            json={
+                "story_seed": "一句话故事",
+                "themes": ["成长"],
+                "pace": 7,
+                "moods": ["热血"],
+                "stage": "准备开始正文",
+            },
+        )
+        assert r.status_code == 200
+        body = r.json()
+        assert body["story_seed"] == "一句话故事"
+        assert body["themes"] == ["成长"]
+        assert body["pace"] == 7
+        assert body["moods"] == ["热血"]
+        assert body["stage"] == "准备开始正文"
+
+    def test_update_clear_creation_field_to_null(self, client):
+        wid = client.post(
+            "/api/v1/works", json=_payload(story_seed="原值", pace=5)
+        ).json()["id"]
+        r = client.put(f"/api/v1/works/{wid}", json={"story_seed": None, "pace": None})
+        assert r.status_code == 200
+        assert r.json()["story_seed"] is None
+        assert r.json()["pace"] is None
 
 
 class TestDeleteWork:

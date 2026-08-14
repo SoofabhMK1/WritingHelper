@@ -23,7 +23,7 @@ import time
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ValidationError
 from sqlalchemy.orm import Session
 
 from app.ai import client as ai_client
@@ -97,6 +97,60 @@ class ExpandRequest(BaseModel):
     work_id: int
     selection: str = Field(..., min_length=10)
     target_chars: int = Field(400, ge=50, le=2000)
+
+
+class CompletionRequest(BaseModel):
+    """Draft of a work that may not exist yet (work_id optional — used only
+    for audit logging when completing from the edit page)."""
+
+    work_id: int | None = None
+    title: str | None = None
+    story_seed: str | None = None
+    raw_idea: str | None = None
+    core_conflict: str | None = None
+    protagonist_goal: str | None = None
+    themes: list[str] | None = None
+    era: str | None = None
+    setting: str | None = None
+    world_rules: str | None = None
+    pace: int | None = Field(None, ge=1, le=10)
+    realism: int | None = Field(None, ge=1, le=10)
+    prose: int | None = Field(None, ge=1, le=10)
+    moods: list[str] | None = None
+    length_type: str | None = None
+    target_words: int | None = Field(None, ge=0)
+    stage: str | None = None
+
+
+class CompletionFieldItem(BaseModel):
+    status: str = "insufficient"
+    value: Any = None
+    reason: str = ""
+
+
+class CompletionAnalysis(BaseModel):
+    story_core: CompletionFieldItem = Field(default_factory=CompletionFieldItem)
+    core_conflict: CompletionFieldItem = Field(default_factory=CompletionFieldItem)
+    protagonist_goal: CompletionFieldItem = Field(default_factory=CompletionFieldItem)
+    setting: CompletionFieldItem = Field(default_factory=CompletionFieldItem)
+    world_rules: CompletionFieldItem = Field(default_factory=CompletionFieldItem)
+    themes: CompletionFieldItem = Field(default_factory=CompletionFieldItem)
+
+
+class CompletionCompleteness(BaseModel):
+    story: int = 0
+    character: int = 0
+    world: int = 0
+    style: int = 0
+    planning: int = 0
+
+
+class CompletionResult(BaseModel):
+    analysis: CompletionAnalysis = Field(default_factory=CompletionAnalysis)
+    extracted_facts: list[str] = Field(default_factory=list)
+    potential_conflicts: list[str] = Field(default_factory=list)
+    missing_critical_information: list[str] = Field(default_factory=list)
+    completeness: CompletionCompleteness = Field(default_factory=CompletionCompleteness)
 
 
 # -----------------------------------------------------------------------------
@@ -438,3 +492,33 @@ def suggest_expand(payload: ExpandRequest, db: Session = Depends(get_db)):
         work_id=work.id,
     )
     return {"work_id": work.id, "text": data}
+
+
+@router.post("/suggest/completion", response_model=CompletionResult)
+def suggest_completion(payload: CompletionRequest, db: Session = Depends(get_db)):
+    work_id: int | None = None
+    if payload.work_id is not None:
+        work_id = _require_work(db, payload.work_id).id
+
+    project = {
+        k: v
+        for k, v in payload.model_dump(exclude={"work_id"}).items()
+        if v not in (None, "", [], 0)
+    }
+    if not project:
+        raise HTTPException(status_code=400, detail="请先填写至少一项作品信息再补完")
+    project_data = json.dumps(project, ensure_ascii=False, indent=2)
+
+    data = _call(
+        db,
+        "completion",
+        {"project_data": project_data},
+        endpoint=AIEndpoint.COMPLETION,
+        work_id=work_id,
+    )
+    try:
+        return CompletionResult.model_validate(data)
+    except ValidationError as e:
+        raise HTTPException(
+            status_code=502, detail=f"AI 返回的补完结果结构不合法: {e.errors()[:3]}"
+        ) from e

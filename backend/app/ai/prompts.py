@@ -273,6 +273,112 @@ EXPAND_PROMPT = Prompt(
 )
 
 
+# ============================================================================
+# Completion / 作品补完
+# ============================================================================
+
+COMPLETION_SYSTEM = """你是一名经验丰富的长篇小说编辑、故事架构师和 AI 小说创作助手。
+
+你的任务不是替用户创作一部完整小说,也不是随意发挥,而是分析用户当前已经提供的小说设定,并帮助用户补全“缺失但重要”的作品基础信息。
+
+你必须遵守以下原则:
+
+1. 用户明确填写的内容优先级最高。
+2. 不得修改、推翻或重写用户已经明确填写的设定。
+3. 不要为了“补全”而补全。
+4. 如果已有信息不足以进行合理推断,可以返回“不建议补全”。
+5. 所有 AI 生成内容必须视为“建议”,而不是最终设定。
+6. 建议必须与用户已有的故事类型、时代背景、风格、主题和已有设定保持一致。
+7. 不要引入明显改变作品方向的新设定。
+8. 不要擅自增加复杂的世界观、人物或剧情主线。
+9. 优先补全真正影响小说后续创作的核心信息。
+10. 输出必须结构化,方便前端逐项展示和让用户选择是否采用。
+
+请重点分析以下内容:
+
+- 故事核心
+- 核心冲突
+- 主角目标
+- 世界背景
+- 世界规则
+- 核心主题
+- 创作风格
+- 可能存在的设定矛盾
+- 当前信息中已经隐含但尚未结构化的内容
+
+对于每一个字段:
+
+如果用户已经明确填写:
+返回 status = "existing"
+
+如果可以根据已有信息合理推断:
+返回 status = "suggested"
+
+如果信息不足,不应该猜测:
+返回 status = "insufficient"
+
+绝对不要为了输出完整而虚构大量设定。
+只输出 JSON,不要任何解释或前后缀。"""
+
+COMPLETION_USER = """以下是用户当前正在创建的小说项目。
+
+请分析这些信息,并识别:
+
+1. 用户已经明确确定的内容
+2. 可以从已有信息中合理推断出的内容
+3. 当前仍然缺失且无法合理推断的内容
+4. 是否存在明显矛盾
+
+注意:
+
+用户明确填写的信息具有最高优先级。
+
+AI 只能为“缺失字段”提供建议。
+
+不要修改用户已经明确填写的字段。
+
+不要为了让作品看起来完整而随意创造人物、组织、超能力、剧情或世界观。
+
+用户当前数据:
+
+{project_data}
+
+请严格按照以下 JSON 结构返回(不要增删顶层字段):
+{{
+  "analysis": {{
+    "story_core": {{ "status": "existing|suggested|insufficient", "value": "", "reason": "" }},
+    "core_conflict": {{ "status": "existing|suggested|insufficient", "value": "", "reason": "" }},
+    "protagonist_goal": {{ "status": "existing|suggested|insufficient", "value": "", "reason": "" }},
+    "setting": {{ "status": "existing|suggested|insufficient", "value": "", "reason": "" }},
+    "world_rules": {{ "status": "existing|suggested|insufficient", "value": "", "reason": "" }},
+    "themes": {{ "status": "existing|suggested|insufficient", "value": [], "reason": "" }}
+  }},
+  "extracted_facts": ["从用户输入中识别出的已隐含事实"],
+  "potential_conflicts": ["设定之间可能存在的矛盾"],
+  "missing_critical_information": ["仍然缺失且无法合理推断的关键信息"],
+  "completeness": {{
+    "story": 0,
+    "character": 0,
+    "world": 0,
+    "style": 0,
+    "planning": 0
+  }}
+}}
+
+其中:
+- analysis 只覆盖上述 6 个字段;status 为 existing 时 value 原样保留用户内容
+- value 类型为字符串(themes 为字符串数组)
+- completeness 各项为 0-100 的整数,表示该维度信息的完整程度"""
+
+COMPLETION_PROMPT = Prompt(
+    name="completion",
+    system=COMPLETION_SYSTEM,
+    user_template=COMPLETION_USER,
+    json_mode=True,
+    temperature=0.7,
+)
+
+
 PROMPTS = {
     p.name: p for p in (
         OUTLINE_PROMPT,
@@ -283,6 +389,7 @@ PROMPTS = {
         CONTINUE_PROMPT,
         EXPAND_PROMPT,
         CHAT_PROMPT,
+        COMPLETION_PROMPT,
     )
 }
 

@@ -1,6 +1,7 @@
 import type { ComponentType, CSSProperties } from "react";
 import {
   AlertOutlined,
+  BulbOutlined,
   CheckCircleOutlined,
   CommentOutlined,
   EditOutlined,
@@ -18,7 +19,8 @@ export type PromptName =
   | "consistency"
   | "continue"
   | "expand"
-  | "chat";
+  | "chat"
+  | "completion";
 
 export const PROMPT_LABELS: Record<PromptName, string> = {
   outline: "卷大纲生成",
@@ -29,6 +31,7 @@ export const PROMPT_LABELS: Record<PromptName, string> = {
   continue: "续写",
   expand: "扩写",
   chat: "自由对话",
+  completion: "作品补完",
 };
 
 export const PROMPT_DESCRIPTIONS: Record<PromptName, string> = {
@@ -40,6 +43,7 @@ export const PROMPT_DESCRIPTIONS: Record<PromptName, string> = {
   continue: "基于已有正文最后若干字,续写下一段",
   expand: "把简略片段扩写为更详细、更生动的正文",
   chat: "基于已载入的作品上下文进行自由提问",
+  completion: "分析已有作品设定,仅为缺失字段给出可采纳的补全建议",
 };
 
 export const PROMPT_ICONS: Record<PromptName, ComponentType<{ style?: CSSProperties }>> = {
@@ -51,6 +55,7 @@ export const PROMPT_ICONS: Record<PromptName, ComponentType<{ style?: CSSPropert
   continue: EditOutlined,
   expand: ExperimentOutlined,
   chat: CommentOutlined,
+  completion: BulbOutlined,
 };
 
 export const PROMPT_LIST: readonly PromptName[] = [
@@ -62,6 +67,7 @@ export const PROMPT_LIST: readonly PromptName[] = [
   "continue",
   "expand",
   "chat",
+  "completion",
 ];
 
 export function isPromptName(s: string | undefined): s is PromptName {

@@ -275,28 +275,162 @@ def test_suggest_expand(mock_chat, client, work_id):
 
 
 # =============================================================================
+# Completion / 作品补完
+# =============================================================================
+
+MOCK_COMPLETION_JSON = """{
+  "analysis": {
+    "story_core": {"status": "existing", "value": "一个年轻干部来到偏远乡镇。", "reason": "用户已填写"},
+    "core_conflict": {"status": "suggested", "value": "主角对抗隐藏的权力网络。", "reason": "由简介推断"},
+    "protagonist_goal": {"status": "suggested", "value": "改变当地经济", "reason": "由简介推断"},
+    "setting": {"status": "insufficient", "value": "", "reason": "信息不足"},
+    "world_rules": {"status": "insufficient", "value": "", "reason": "信息不足"},
+    "themes": {"status": "suggested", "value": ["权力", "人性"], "reason": "由题材推断"}
+  },
+  "extracted_facts": ["现代中国背景"],
+  "potential_conflicts": [],
+  "missing_critical_information": ["主角的具体身份背景"],
+  "completeness": {"story": 60, "character": 30, "world": 20, "style": 50, "planning": 10}
+}"""
+
+
+@patch("app.ai.client.chat")
+def test_suggest_completion(mock_chat, client):
+    mock_chat.return_value = MOCK_COMPLETION_JSON
+    r = client.post(
+        "/api/v1/ai/suggest/completion",
+        json={
+            "story_seed": "一个年轻干部来到偏远乡镇。",
+            "raw_idea": "我希望整体节奏很慢。",
+            "themes": ["权力"],
+            "pace": 3,
+            "moods": ["压抑", "克制"],
+        },
+    )
+    assert r.status_code == 200
+    body = r.json()
+    assert body["analysis"]["story_core"]["status"] == "existing"
+    assert body["analysis"]["core_conflict"]["status"] == "suggested"
+    assert body["analysis"]["core_conflict"]["value"] == "主角对抗隐藏的权力网络。"
+    assert body["analysis"]["themes"]["value"] == ["权力", "人性"]
+    assert body["completeness"]["story"] == 60
+    assert body["extracted_facts"] == ["现代中国背景"]
+    assert body["missing_critical_information"] == ["主角的具体身份背景"]
+    user_msg = mock_chat.call_args.kwargs["user"]
+    assert "一个年轻干部来到偏远乡镇。" in user_msg
+    mock_chat.assert_called_once()
+
+
+@patch("app.ai.client.chat")
+def test_suggest_completion_with_work_id(mock_chat, client, work_id):
+    mock_chat.return_value = MOCK_COMPLETION_JSON
+    r = client.post(
+        "/api/v1/ai/suggest/completion",
+        json={"work_id": work_id, "story_seed": "一句话故事"},
+    )
+    assert r.status_code == 200
+
+
+def test_suggest_completion_bad_work_id_404(client):
+    r = client.post(
+        "/api/v1/ai/suggest/completion",
+        json={"work_id": 9999, "story_seed": "x"},
+    )
+    assert r.status_code == 404
+
+
+@patch("app.ai.client.chat")
+def test_suggest_completion_empty_payload_400(mock_chat, client):
+    r = client.post("/api/v1/ai/suggest/completion", json={})
+    assert r.status_code == 400
+    assert mock_chat.call_count == 0
+
+
+@patch("app.ai.client.chat")
+def test_suggest_completion_blank_values_ignored(mock_chat, client):
+    r = client.post(
+        "/api/v1/ai/suggest/completion",
+        json={"title": "", "story_seed": "", "themes": [], "target_words": 0},
+    )
+    assert r.status_code == 400
+    assert mock_chat.call_count == 0
+
+
+@patch("app.ai.client.chat")
+def test_suggest_completion_lenient_defaults(mock_chat, client):
+    mock_chat.return_value = (
+        '{"analysis": {"core_conflict": {"status": "suggested", "value": "x", "reason": "r"}}}'
+    )
+    r = client.post(
+        "/api/v1/ai/suggest/completion",
+        json={"story_seed": "一个模糊的想法"},
+    )
+    assert r.status_code == 200
+    body = r.json()
+    assert body["analysis"]["core_conflict"]["value"] == "x"
+    assert body["analysis"]["setting"]["status"] == "insufficient"
+    assert body["extracted_facts"] == []
+    assert body["completeness"]["story"] == 0
+
+
+@patch("app.ai.client.chat")
+def test_suggest_completion_invalid_shape_502(mock_chat, client):
+    mock_chat.return_value = '{"analysis": "not an object"}'
+    r = client.post(
+        "/api/v1/ai/suggest/completion",
+        json={"story_seed": "一个模糊的想法"},
+    )
+    assert r.status_code == 502
+
+
+@patch("app.ai.client.chat")
+def test_suggest_completion_invalid_json_502(mock_chat, client):
+    mock_chat.return_value = "not a json"
+    r = client.post(
+        "/api/v1/ai/suggest/completion",
+        json={"story_seed": "一个模糊的想法"},
+    )
+    assert r.status_code == 502
+
+
+@patch("app.ai.client.chat")
+def test_suggest_completion_not_configured_503(mock_chat, client):
+    from app.ai.client import AIServiceError
+
+    mock_chat.side_effect = AIServiceError("not set", code="not_configured")
+    r = client.post(
+        "/api/v1/ai/suggest/completion",
+        json={"story_seed": "一个模糊的想法"},
+    )
+    assert r.status_code == 503
+    logs = client.get("/api/v1/ai-logs", params={"status": "not_configured"}).json()["items"]
+    assert len(logs) == 1
+    assert logs[0]["endpoint"] == "/ai/suggest/completion"
+
+
+# =============================================================================
 # Prompt catalog (read-only)
 # =============================================================================
 
 class TestPromptCatalog:
-    def test_list_prompts_returns_eight(self, client):
+    def test_list_prompts_returns_nine(self, client):
         r = client.get("/api/v1/ai/prompts")
         assert r.status_code == 200
         names = [p["name"] for p in r.json()]
-        assert len(names) == 8
+        assert len(names) == 9
 
     def test_list_prompts_contains_chat(self, client):
         names = {p["name"] for p in client.get("/api/v1/ai/prompts").json()}
         assert "chat" in names
         for expected in ("outline", "chapters", "character", "event",
-                          "consistency", "continue", "expand"):
+                          "consistency", "continue", "expand", "completion"):
             assert expected in names
 
     def test_list_prompts_stable_order(self, client):
         names = [p["name"] for p in client.get("/api/v1/ai/prompts").json()]
         assert names == [
             "outline", "chapters", "character", "event",
-            "consistency", "continue", "expand", "chat",
+            "consistency", "continue", "expand", "chat", "completion",
         ]
 
     def test_summary_shape(self, client):
@@ -305,7 +439,7 @@ class TestPromptCatalog:
 
     def test_get_prompt_known(self, client):
         for name in ("outline", "chapters", "character", "event",
-                     "consistency", "continue", "expand", "chat"):
+                      "consistency", "continue", "expand", "chat", "completion"):
             r = client.get(f"/api/v1/ai/prompts/{name}")
             assert r.status_code == 200, name
             body = r.json()

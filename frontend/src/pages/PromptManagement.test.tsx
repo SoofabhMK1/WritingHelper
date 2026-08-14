@@ -64,6 +64,7 @@ describe("PromptManagement page", () => {
       "续写",
       "扩写",
       "自由对话",
+      "作品补完",
     ]) {
       expect(screen.getByText(label)).toBeInTheDocument();
     }
@@ -138,7 +139,7 @@ describe("PromptManagement page", () => {
     // every unbound row has a "系统默认" tag
     await waitFor(() => {
       const tags = screen.getAllByText("系统默认");
-      expect(tags.length).toBe(7); // 8 rows minus the bound outline
+      expect(tags.length).toBe(8); // 9 rows minus the bound outline
     });
     // the bound row's Tag (not the Select option) shows the assembly name
     expect(screen.getAllByText("我的卷大纲").length).toBeGreaterThanOrEqual(1);

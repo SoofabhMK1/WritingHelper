@@ -9,7 +9,7 @@ import {
 
 describe("prompt display metadata", () => {
   it("exposes the expected number of prompts", () => {
-    expect(PROMPT_LIST).toHaveLength(8);
+    expect(PROMPT_LIST).toHaveLength(9);
   });
 
   it("has a label for every prompt name", () => {

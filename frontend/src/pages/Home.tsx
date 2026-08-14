@@ -15,6 +15,7 @@ import {
 import {
   DeleteOutlined,
   EditOutlined,
+  ImportOutlined,
   PlusOutlined,
   SearchOutlined,
 } from "@ant-design/icons";
@@ -134,6 +135,9 @@ export function Home() {
         <Title level={3} style={{ margin: 0 }}>作品库</Title>
         <Space size="large">
           <Typography.Text type="secondary">共 {stats.total} 部 · 写作中 {stats.writing} · 累计 {stats.words.toLocaleString()} 字</Typography.Text>
+          <Button icon={<ImportOutlined />} onClick={() => navigate("/works/import")}>
+            导入已有作品
+          </Button>
           <Button type="primary" icon={<PlusOutlined />} onClick={() => navigate("/works/new")}>
             新建作品
           </Button>

@@ -49,6 +49,56 @@ export interface ConsistencyResult {
   summary: string;
 }
 
+export type CompletionStatus = "existing" | "suggested" | "insufficient";
+
+export interface CompletionFieldItem {
+  status: CompletionStatus;
+  value: string | string[] | null;
+  reason: string;
+}
+
+export type CompletionAnalysisKey =
+  | "story_core"
+  | "core_conflict"
+  | "protagonist_goal"
+  | "setting"
+  | "world_rules"
+  | "themes";
+
+export interface CompletionResult {
+  analysis: Record<CompletionAnalysisKey, CompletionFieldItem>;
+  extracted_facts: string[];
+  potential_conflicts: string[];
+  missing_critical_information: string[];
+  completeness: {
+    story: number;
+    character: number;
+    world: number;
+    style: number;
+    planning: number;
+  };
+}
+
+export interface CompletionDraft {
+  work_id?: number;
+  title?: string | null;
+  story_seed?: string | null;
+  raw_idea?: string | null;
+  core_conflict?: string | null;
+  protagonist_goal?: string | null;
+  themes?: string[] | null;
+  era?: string | null;
+  setting?: string | null;
+  world_rules?: string | null;
+  pace?: number | null;
+  realism?: number | null;
+  prose?: number | null;
+  moods?: string[] | null;
+  length_type?: string | null;
+  target_words?: number | null;
+  stage?: string | null;
+}
+
 export const aiKeys = {
   all: ["ai"] as const,
 };
@@ -162,6 +212,20 @@ export function useSuggestExpand(workId: number) {
       const { data } = await api.post<{ text: string }>("/ai/suggest/expand", {
         work_id: workId,
         ...payload,
+      });
+      return data;
+    },
+  });
+}
+
+// ---------- completion / 作品补完 ----------
+
+export function useSuggestCompletion(workId?: number) {
+  return useMutation({
+    mutationFn: async (draft: CompletionDraft) => {
+      const { data } = await api.post<CompletionResult>("/ai/suggest/completion", {
+        work_id: workId,
+        ...draft,
       });
       return data;
     },

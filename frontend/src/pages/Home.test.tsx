@@ -38,6 +38,10 @@ function renderHomeWithRouting() {
             path="/works/:id/edit"
             element={<div data-testid="work-edit">work edit page</div>}
           />
+          <Route
+            path="/works/import"
+            element={<div data-testid="work-import">work import page</div>}
+          />
         </Routes>
       </MemoryRouter>
     </QueryClientProvider>
@@ -130,6 +134,40 @@ describe("Home page", () => {
     expect(
       await screen.findByRole("button", { name: /新建作品/ })
     ).toBeInTheDocument();
+  });
+
+  it("renders the import button next to the new work button", async () => {
+    vi.mocked(worksModule.useWorks).mockReturnValue({
+      data: [],
+      isLoading: false,
+    } as any);
+    vi.mocked(worksModule.useDeleteWork).mockReturnValue({
+      mutate: vi.fn(),
+    } as any);
+
+    renderHome();
+
+    expect(
+      await screen.findByRole("button", { name: /导入已有作品/ })
+    ).toBeInTheDocument();
+  });
+
+  it("navigates to /works/import when the import button is clicked", async () => {
+    vi.mocked(worksModule.useWorks).mockReturnValue({
+      data: [],
+      isLoading: false,
+    } as any);
+    vi.mocked(worksModule.useDeleteWork).mockReturnValue({
+      mutate: vi.fn(),
+    } as any);
+
+    const user = userEvent.setup();
+    renderHomeWithRouting();
+
+    const importBtn = await screen.findByRole("button", { name: /导入已有作品/ });
+    await user.click(importBtn);
+
+    expect(await screen.findByTestId("work-import")).toBeInTheDocument();
   });
 
   it("shows loading text while fetching", async () => {

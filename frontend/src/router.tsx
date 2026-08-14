@@ -2,6 +2,7 @@ import { createBrowserRouter, Navigate, useParams } from "react-router-dom";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Home } from "@/pages/Home";
 import { WorkForm } from "@/pages/WorkForm";
+import { WorkImport } from "@/pages/WorkImport";
 import { WorkOverview } from "@/pages/WorkOverview";
 import { Outline } from "@/components/outline/Outline";
 import { ChapterEditor } from "@/pages/ChapterEditor";
@@ -69,6 +70,7 @@ export const router = createBrowserRouter([
       { path: "ai-logs", element: <AILogs /> },
       { path: "ai-logs/:id", element: <AILogDetail /> },
       { path: "works/new", element: <WorkForm /> },
+      { path: "works/import", element: <WorkImport /> },
       { path: "works/:wid/edit", element: <WorkForm /> },
       { path: "works/:wid", element: <WorkOverview /> },
       { path: "works/:wid/outline", element: <WorkOutlinePage /> },
