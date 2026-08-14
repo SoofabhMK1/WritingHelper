@@ -1,7 +1,8 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { Home } from "@/pages/Home";
 import * as worksModule from "@/api/works";
 
@@ -15,6 +16,29 @@ function renderHome() {
     <QueryClientProvider client={qc}>
       <MemoryRouter>
         <Home />
+      </MemoryRouter>
+    </QueryClientProvider>
+  );
+}
+
+function renderHomeWithRouting() {
+  const qc = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
+  return render(
+    <QueryClientProvider client={qc}>
+      <MemoryRouter initialEntries={["/"]}>
+        <Routes>
+          <Route path="/" element={<Home />} />
+          <Route
+            path="/works/:id"
+            element={<div data-testid="work-detail">work detail page</div>}
+          />
+          <Route
+            path="/works/:id/edit"
+            element={<div data-testid="work-edit">work edit page</div>}
+          />
+        </Routes>
       </MemoryRouter>
     </QueryClientProvider>
   );
@@ -139,5 +163,57 @@ describe("Home page", () => {
     expect(await screen.findByText("无法连接到后端服务")).toBeInTheDocument();
     expect(screen.getByText(/uvicorn app.main:app/)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /重\s?试/ })).toBeInTheDocument();
+  });
+
+  it("does not render the eye icon on work cards", async () => {
+    vi.mocked(worksModule.useWorks).mockReturnValue({
+      data: [sampleWork],
+      isLoading: false,
+    } as any);
+    vi.mocked(worksModule.useDeleteWork).mockReturnValue({
+      mutate: vi.fn(),
+    } as any);
+
+    renderHome();
+
+    expect(await screen.findByText("青云问道录")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /查看|eye|眼睛/i })).toBeNull();
+  });
+
+  it("navigates to /works/:id when the card body is clicked", async () => {
+    vi.mocked(worksModule.useWorks).mockReturnValue({
+      data: [sampleWork],
+      isLoading: false,
+    } as any);
+    vi.mocked(worksModule.useDeleteWork).mockReturnValue({
+      mutate: vi.fn(),
+    } as any);
+
+    const user = userEvent.setup();
+    renderHomeWithRouting();
+
+    const title = await screen.findByText("青云问道录");
+    await user.click(title);
+
+    expect(await screen.findByTestId("work-detail")).toBeInTheDocument();
+  });
+
+  it("navigates to the edit page when the edit button is clicked (not the detail page)", async () => {
+    vi.mocked(worksModule.useWorks).mockReturnValue({
+      data: [sampleWork],
+      isLoading: false,
+    } as any);
+    vi.mocked(worksModule.useDeleteWork).mockReturnValue({
+      mutate: vi.fn(),
+    } as any);
+
+    const user = userEvent.setup();
+    renderHomeWithRouting();
+
+    const editBtn = await screen.findByRole("button", { name: "编辑作品" });
+    await user.click(editBtn);
+
+    expect(await screen.findByTestId("work-edit")).toBeInTheDocument();
+    expect(screen.queryByTestId("work-detail")).toBeNull();
   });
 });

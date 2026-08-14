@@ -13,7 +13,7 @@ import {
   message,
 } from "antd";
 import { ArrowLeftOutlined } from "@ant-design/icons";
-import { useNavigate, useParams } from "react-router-dom";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 import {
   useCreateWork,
   useUpdateWork,
@@ -51,7 +51,18 @@ export function WorkForm() {
   const widNum = isEditMode ? Number(wid) : undefined;
 
   const navigate = useNavigate();
+  const location = useLocation();
   const [form] = Form.useForm<FormValues>();
+
+  const fromState = (location.state as { from?: string } | null)?.from;
+  const backTarget =
+    fromState ?? (isEditMode && wid ? `/works/${wid}` : "/");
+  const backLabel =
+    backTarget === "/"
+      ? "返回作品库"
+      : isEditMode
+        ? "返回作品详情"
+        : "返回作品库";
 
   const { data: existing, isLoading } = useWork(widNum);
   const { mutate: create, isPending: creating } = useCreateWork();
@@ -110,11 +121,9 @@ export function WorkForm() {
       <Space style={{ marginBottom: 16 }} wrap>
         <Button
           icon={<ArrowLeftOutlined />}
-          onClick={() =>
-            navigate(isEditMode && wid ? `/works/${wid}` : "/")
-          }
+          onClick={() => navigate(backTarget)}
         >
-          {isEditMode ? "返回作品详情" : "返回作品库"}
+          {backLabel}
         </Button>
         <Typography.Title level={3} style={{ margin: 0 }}>
           {isEditMode ? "编辑作品" : "新建作品"}

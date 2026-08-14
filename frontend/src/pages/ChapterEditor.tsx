@@ -37,18 +37,7 @@ import {
   type ChapterStatus,
   type ChapterTypeKind,
 } from "@/types/chapter";
-import { TiptapEditor } from "@/components/editor/TiptapEditor";
-import {
-  useCreateForeshadow,
-  useDeleteForeshadow,
-  useForeshadows,
-  useUpdateForeshadow,
-} from "@/api/foreshadowing";
-import {
-  FORESHADOW_STATUS_COLOR,
-  FORESHADOW_STATUS_LABEL,
-  type ForeshadowStatusKind,
-} from "@/types/foreshadow";
+import { MarkdownEditor } from "@/components/editor/MarkdownEditor";
 
 const STATUS_OPTIONS: { value: ChapterStatus; label: string }[] = (
   Object.entries(CHAPTER_STATUS_LABEL) as [ChapterStatus, string][]
@@ -81,10 +70,6 @@ export function ChapterEditor() {
   const { data: allVolumes = [] } = useVolumes(workId);
   const { mutate: update, isPending } = useUpdateChapter(workId);
   const { mutate: remove } = useDeleteChapter(workId);
-  const { data: foreshadows = [] } = useForeshadows(workId);
-  const { mutate: createFs } = useCreateForeshadow(workId);
-  const { mutate: updateFs } = useUpdateForeshadow(workId);
-  const { mutate: deleteFs } = useDeleteForeshadow(workId);
 
   useEffect(() => {
     if (chapter) {
@@ -137,13 +122,13 @@ export function ChapterEditor() {
   }
   if (!chapter) return <Typography.Text type="secondary">章节不存在</Typography.Text>;
 
-  async function onSave(_html: string, plainText: string) {
+  async function onSave(_markdown: string, plainText: string) {
     let values;
     try {
       values = await form.validateFields();
     } catch (err) {
       // Surface validation error so the user knows to fix the side panel.
-      message.warning("请先在右侧填写完整的章节属性（标题、字数等）");
+      message.warning("请先在右侧填写完整的章节属性(标题、字数等)");
       throw err;
     }
     await update(
@@ -151,6 +136,7 @@ export function ChapterEditor() {
         id: chapterId,
         payload: {
           ...values,
+          content: _markdown,
           actual_words: plainText.length,
         },
       },
@@ -173,33 +159,6 @@ export function ChapterEditor() {
       onError: (e: Error) => message.error(`删除失败: ${e.message}`),
     });
   }
-
-  async function onAddForeshadow(quote: string) {
-    return new Promise<void>((resolve) => {
-      createFs(
-        {
-          title: `伏笔:${quote.slice(0, 30)}`,
-          quote,
-          chapter_id: chapterId,
-          status: "open",
-        },
-        {
-          onSuccess: () => {
-            message.success("伏笔已保存");
-            resolve();
-          },
-          onError: (e: Error) => {
-            message.error(`伏笔保存失败: ${e.message}`);
-            resolve();
-          },
-        },
-      );
-    });
-  }
-
-  const chapterForeshadows = foreshadows.filter(
-    (f) => f.chapter_id === chapterId || f.planted_chapter_id === chapterId
-  );
 
   // Derived from flatChapters (already memoized above the early returns).
   const currentIndex = flatChapters.findIndex((c) => c.id === chapterId);
@@ -249,12 +208,11 @@ export function ChapterEditor() {
       <Row gutter={16}>
         <Col span={16}>
           <Card title="正文" size="small" style={{ marginBottom: 16 }}>
-            <TiptapEditor
+            <MarkdownEditor
               workId={workId}
               chapterId={chapterId}
               initialContent={chapter.content ?? ""}
               onSave={onSave}
-              onAddForeshadow={onAddForeshadow}
             />
           </Card>
 
@@ -306,69 +264,6 @@ export function ChapterEditor() {
                 <InputNumber min={0} step={500} style={{ width: "100%" }} />
               </Form.Item>
             </Form>
-          </Card>
-
-          <Card
-            title={
-              <Space>
-                <span>伏笔</span>
-                <Tag>{chapterForeshadows.length}</Tag>
-              </Space>
-            }
-            size="small"
-            style={{ marginBottom: 16 }}
-          >
-            {chapterForeshadows.length === 0 ? (
-              <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                在正文中选中文字→点 "标记伏笔" 按钮
-              </Typography.Text>
-            ) : (
-              <Space direction="vertical" style={{ width: "100%" }}>
-                {chapterForeshadows.map((f) => (
-                  <Card size="small" key={f.id} style={{ background: "#fffbe6" }}>
-                    <Space style={{ width: "100%", justifyContent: "space-between" }}>
-                      <Typography.Text strong>{f.title}</Typography.Text>
-                      <Select
-                        size="small"
-                        value={f.status}
-                        style={{ width: 100 }}
-                        options={(
-                          Object.entries(FORESHADOW_STATUS_LABEL) as [ForeshadowStatusKind, string][]
-                        ).map(([v, l]) => ({ value: v, label: l }))}
-                        onChange={(status) =>
-                          updateFs({ id: f.id, payload: { status } })
-                        }
-                        tagRender={({ value }) => (
-                          <Tag color={FORESHADOW_STATUS_COLOR[value as ForeshadowStatusKind]}>
-                            {FORESHADOW_STATUS_LABEL[value as ForeshadowStatusKind]}
-                          </Tag>
-                        )}
-                      />
-                    </Space>
-                    {f.quote && (
-                      <Typography.Paragraph
-                        type="secondary"
-                        style={{ fontSize: 12, marginTop: 6, marginBottom: 0 }}
-                        ellipsis={{ rows: 2 }}
-                      >
-                        "{f.quote}"
-                      </Typography.Paragraph>
-                    )}
-                    <Popconfirm
-                      title="删除该伏笔?"
-                      okText="删除"
-                      cancelText="取消"
-                      okButtonProps={{ danger: true }}
-                      onConfirm={() => deleteFs(f.id)}
-                    >
-                      <Button size="small" danger type="text" icon={<DeleteOutlined />} style={{ marginTop: 4 }}>
-                        删除
-                      </Button>
-                    </Popconfirm>
-                  </Card>
-                ))}
-              </Space>
-            )}
           </Card>
 
           <Card title="危险操作" size="small">

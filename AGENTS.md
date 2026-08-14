@@ -12,7 +12,7 @@ A single-user, local-first AI-assisted Chinese novel writing tool.
   foreshadowing, app settings (KV), AI service profiles, prompt
   assemblies + bindings, and the LLM request/response audit log;
   exposes an OpenAI-compatible AI client.
-- **Frontend** (React 18 + Vite + TypeScript + Ant Design 5 + Tiptap): a
+- **Frontend** (React 18 + Vite + TypeScript + Ant Design 5 + Markdown editor): a
   single-page app for the above, with a rich-text editor, AI drawer,
   and LLM request log.
 - **AI**: configured at runtime as **multiple saved API profiles** (see
@@ -56,7 +56,7 @@ xiaoshuo-mk1/
 ├── frontend/
 │   ├── src/
 │   │   ├── api/                   axios + react-query hooks (one file per resource)
-│   │   ├── components/            layout / ErrorBoundary / editor (Tiptap) / outline
+│   │   ├── components/            layout / ErrorBoundary / editor (Markdown) / outline
 │   │   ├── pages/                 route-level screens
 │   │   ├── store/                 zustand stores (theme, aiDrawer)
 │   │   ├── hooks/                 useShortcuts
@@ -205,15 +205,23 @@ otherwise every query fails with `no such table: <name>`.
   of `MainLayout` so any sub-page can call `openVolume(workId, v)` /
   `openChapter(workId, c)` to summon it. When adding a new AI capability,
   extend the drawer; don't reinvent a new place.
-- Tiptap v3: `BubbleMenu` was removed. Use the toolbar (`components/editor/TiptapEditor.tsx`).
-  Custom marks live alongside `StarterKit` in the same `extensions` array.
-- **Tiptap-editor autosave** is debounced 2s and calls `onSave(html, plain)`
-  on the parent (`ChapterEditor`). The parent runs `form.validateFields()`
-  first; if validation fails, surface a `message.warning` and re-throw so
-  the editor shows the error and the `pending` state stays "dirty" (not
-  "idle"). Don't silently swallow save errors.
-- Vite manualChunks: `vendor-react`, `vendor-antd`, `vendor-query`. Do
-  **not** add `@tiptap/pm` to manualChunks — it has no main entry.
+- The chapter body editor (`components/editor/MarkdownEditor.tsx`) is a
+  controlled `<MDEditor>` from `@uiw/react-md-editor` with live preview.
+  It is **not** Tiptap any more — the Tiptap stack and its custom
+  `ForeshadowMark` were removed. The editor autosaves the markdown source
+  to `Chapter.content` (debounced 2s, signature `onSave(markdown, plain)`).
+  The parent (`ChapterEditor`) runs `form.validateFields()` first; if it
+  fails, surface a `message.warning` and re-throw so the editor stays
+  "dirty" (not "idle"). Don't silently swallow save errors. AI buttons
+  (续写 / 扩写 / 一致性检查) live in the editor's top toolbar and manipulate
+  the markdown via `editorRef.current.textarea` (selection range + splice).
+- **Legacy HTML migration**: chapters written by the old Tiptap editor are
+  detected via `looksLikeHtml()` and converted with `turndown` on first
+  load. The converted markdown is flushed back to the backend as a
+  transparent one-shot migration — users do not need to re-save manually.
+  Pure helpers live in `components/editor/markdownUtils.ts` (covered by
+  `markdownUtils.test.ts`).
+- Vite manualChunks: `vendor-react`, `vendor-antd`, `vendor-query`.
 - React 18+ new JSX transform is enabled; do not import `React` for
   JSX. Direct usage of `React.Something` (e.g. `React.CSSProperties`)
   must be replaced with a named type import (`import type { CSSProperties } from "react"`).
@@ -398,7 +406,6 @@ when adjusting how the multi-API router works):
 | Two records created in the same second have identical `updated_at`, breaking ordering tests | Use `strftime('%Y-%m-%d %H:%M:%f', 'now')` not `CURRENT_TIMESTAMP` |
 | Frontend `getByRole({ name: "重试" })` returns empty | AntD button text contains a space — use regex `/重\s?试/` |
 | `npm run lint` reports type errors | `lint` runs ESLint, not tsc. Use `npm run typecheck` for that. |
-| `vite build` fails with `Failed to resolve entry for "@tiptap/pm"` | Don't put `@tiptap/pm` in `manualChunks` (it's a subpath-only package) |
 | `MemoryRouter` / `BrowserRouter` test fails with `Cannot read properties of undefined (reading 'matches')` | `matchMedia` not mocked — extend `src/test/setup.ts` |
 | Test of store with module-level singleton fails | Use `vi.resetModules()` + dynamic `await import()` |
 | AI endpoint returns 503 in tests | Expected when no API key is set; tests should mock `app.ai.client.chat` or assert the 503 |

@@ -17,7 +17,6 @@ import {
   EditOutlined,
   PlusOutlined,
   SearchOutlined,
-  EyeOutlined,
 } from "@ant-design/icons";
 import { useNavigate } from "react-router-dom";
 import { useDeleteWork, useWorks } from "@/api/works";
@@ -41,9 +40,21 @@ function WorkCard({
       ? Math.min(100, Math.round((work.current_words / work.target_words) * 100))
       : 0;
 
+  function handleCardKeyDown(e: React.KeyboardEvent<HTMLDivElement>) {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      onOpen(work.id);
+    }
+  }
+
   return (
     <Card
       hoverable
+      role="button"
+      tabIndex={0}
+      onClick={() => onOpen(work.id)}
+      onKeyDown={handleCardKeyDown}
+      style={{ cursor: "pointer" }}
       title={
         <Space>
           <span>{work.title}</span>
@@ -52,16 +63,15 @@ function WorkCard({
         </Space>
       }
       extra={
-        <Space>
+        <Space onClick={(e) => e.stopPropagation()}>
           <Button
             type="text"
-            icon={<EyeOutlined />}
-            onClick={() => onOpen(work.id)}
-          />
-          <Button
-            type="text"
+            aria-label="编辑作品"
             icon={<EditOutlined />}
-            onClick={() => onEdit(work.id)}
+            onClick={(e) => {
+              e.stopPropagation();
+              onEdit(work.id);
+            }}
           />
           <Popconfirm
             title="确认删除这部作品?"
@@ -71,7 +81,12 @@ function WorkCard({
             okButtonProps={{ danger: true }}
             onConfirm={() => onDelete(work.id)}
           >
-            <Button type="text" danger icon={<DeleteOutlined />} />
+            <Button
+              type="text"
+              danger
+              aria-label="删除作品"
+              icon={<DeleteOutlined />}
+            />
           </Popconfirm>
         </Space>
       }
@@ -168,7 +183,7 @@ export function Home() {
               key={w.id}
               work={w}
               onOpen={(id) => navigate(`/works/${id}`)}
-              onEdit={(id) => navigate(`/works/${id}/edit`)}
+              onEdit={(id) => navigate(`/works/${id}/edit`, { state: { from: "/" } })}
               onDelete={(id) =>
                 deleteWork(id, {
                   onSuccess: () => message.success("已删除"),

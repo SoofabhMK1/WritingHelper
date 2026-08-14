@@ -9,7 +9,7 @@ import {
   ExperimentOutlined,
   SettingOutlined,
 } from "@ant-design/icons";
-import { useNavigate, useParams } from "react-router-dom";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { useWork } from "@/api/works";
 import { useAIStatus } from "@/api/settings";
 import { useChapters } from "@/api/chapters";
@@ -19,6 +19,7 @@ export function WorkOverview() {
   const { wid } = useParams<{ wid: string }>();
   const id = Number(wid);
   const navigate = useNavigate();
+  const location = useLocation();
   const { data: work, isLoading, isError, error, refetch } = useWork(id);
   const { data: aiStatus } = useAIStatus();
   const { data: chapters = [] } = useChapters(id);
@@ -71,7 +72,7 @@ export function WorkOverview() {
           )}
         </Space>
         <Space>
-          <Button icon={<EditOutlined />} onClick={() => navigate(`/works/${work.id}/edit`)}>
+          <Button icon={<EditOutlined />} onClick={() => navigate(`/works/${work.id}/edit`, { state: { from: location.pathname } })}>
             编辑
           </Button>
         </Space>

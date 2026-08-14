@@ -8,31 +8,30 @@ import { message } from "antd";
 import { ChapterEditor } from "@/pages/ChapterEditor";
 import * as chaptersModule from "@/api/chapters";
 import * as volumesModule from "@/api/volumes";
-import * as foreshadowingModule from "@/api/foreshadowing";
 
-// Tiptap requires a real DOM with contenteditable semantics; in jsdom the
-// editor crashes during initialization. Stub it out — we only exercise the
-// parent ChapterEditor's form/button logic.
-vi.mock("@/components/editor/TiptapEditor", () => ({
-  TiptapEditor: ({
+// MarkdownEditor relies on a real contenteditable-style DOM that jsdom does
+// not implement (selectionStart / setSelectionRange on the MDEditor textarea
+// are unreliable here). Stub it so we only exercise the parent
+// ChapterEditor's form/button logic.
+vi.mock("@/components/editor/MarkdownEditor", () => ({
+  MarkdownEditor: ({
     onSave,
   }: {
-    onSave: (html: string, plain: string) => Promise<void>;
+    onSave: (md: string, plain: string) => Promise<void>;
   }) => (
     <button
       type="button"
       onClick={() =>
-        onSave("<p>edited</p>", "edited plain").catch(() => {})
+        onSave("# edited markdown", "edited plain").catch(() => {})
       }
     >
-      模拟 Tiptap 触发保存
+      模拟 MarkdownEditor 触发保存
     </button>
   ),
 }));
 
 vi.mock("@/api/chapters");
 vi.mock("@/api/volumes");
-vi.mock("@/api/foreshadowing");
 
 const SAMPLE_CHAPTER = {
   id: 7,
@@ -75,18 +74,6 @@ function setupApis() {
   vi.mocked(chaptersModule.useDeleteChapter).mockReturnValue({
     mutate: vi.fn(),
   } as any);
-  vi.mocked(foreshadowingModule.useForeshadows).mockReturnValue({
-    data: [],
-  } as any);
-  vi.mocked(foreshadowingModule.useCreateForeshadow).mockReturnValue({
-    mutate: vi.fn(),
-  } as any);
-  vi.mocked(foreshadowingModule.useUpdateForeshadow).mockReturnValue({
-    mutate: vi.fn(),
-  } as any);
-  vi.mocked(foreshadowingModule.useDeleteForeshadow).mockReturnValue({
-    mutate: vi.fn(),
-  } as any);
 }
 
 function renderEditor() {
@@ -107,7 +94,7 @@ function renderEditor() {
   );
 }
 
-describe("ChapterEditor — autosave feedback (B7)", () => {
+describe("ChapterEditor — autosave feedback", () => {
   beforeEach(() => {
     vi.resetAllMocks();
     setupApis();
@@ -122,7 +109,7 @@ describe("ChapterEditor — autosave feedback (B7)", () => {
       await screen.findByRole("heading", { name: "第一章" }),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: /模拟 Tiptap 触发保存/ }),
+      screen.getByRole("button", { name: /模拟 MarkdownEditor 触发保存/ }),
     ).toBeInTheDocument();
   });
 
@@ -137,7 +124,7 @@ describe("ChapterEditor — autosave feedback (B7)", () => {
     renderEditor();
 
     await user.click(
-      screen.getByRole("button", { name: /模拟 Tiptap 触发保存/ }),
+      screen.getByRole("button", { name: /模拟 MarkdownEditor 触发保存/ }),
     );
 
     await waitFor(() => {
@@ -158,11 +145,40 @@ describe("ChapterEditor — autosave feedback (B7)", () => {
     renderEditor();
 
     await user.click(
-      screen.getByRole("button", { name: /模拟 Tiptap 触发保存/ }),
+      screen.getByRole("button", { name: /模拟 MarkdownEditor 触发保存/ }),
     );
 
     await waitFor(() => {
       expect(message.error).toHaveBeenCalled();
     });
+  });
+
+  it("autosave sends the markdown content to the backend", async () => {
+    const mutate = vi.fn((_args: unknown, opts?: any) => opts?.onSuccess?.({}));
+    vi.mocked(chaptersModule.useUpdateChapter).mockReturnValue({
+      mutate,
+      isPending: false,
+    } as any);
+
+    const user = userEvent.setup();
+    renderEditor();
+
+    await user.click(
+      screen.getByRole("button", { name: /模拟 MarkdownEditor 触发保存/ }),
+    );
+
+    await waitFor(() => {
+      expect(mutate).toHaveBeenCalled();
+    });
+    const call = mutate.mock.calls[0][0] as {
+      id: number;
+      payload: Record<string, unknown>;
+    };
+    expect(call.id).toBe(7);
+    // Regression guard: editing the chapter used to silently drop the body
+    // because the payload omitted `content`, so re-opening the chapter
+    // showed an empty editor. Make sure the markdown is forwarded now.
+    expect(call.payload.content).toBe("# edited markdown");
+    expect(call.payload.actual_words).toBe("edited plain".length);
   });
 });

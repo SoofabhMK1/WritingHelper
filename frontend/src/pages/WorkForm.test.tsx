@@ -8,16 +8,27 @@ import * as worksModule from "@/api/works";
 
 vi.mock("@/api/works");
 
-function renderForm(path: string) {
+function renderForm(
+  path: string,
+  options: { state?: unknown; extraRoutes?: { path: string; testId: string }[] } = {}
+) {
   const qc = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
+  const extra = options.extraRoutes ?? [];
   return render(
     <QueryClientProvider client={qc}>
-      <MemoryRouter initialEntries={[path]}>
+      <MemoryRouter initialEntries={[{ pathname: path, state: options.state }]}>
         <Routes>
           <Route path="/works/new" element={<WorkForm />} />
           <Route path="/works/:wid/edit" element={<WorkForm />} />
+          {extra.map((r) => (
+            <Route
+              key={r.path}
+              path={r.path}
+              element={<div data-testid={r.testId}>{r.testId}</div>}
+            />
+          ))}
         </Routes>
       </MemoryRouter>
     </QueryClientProvider>
@@ -117,5 +128,70 @@ describe("WorkForm (edit)", () => {
     expect(await screen.findByRole("heading", { name: "编辑作品" })).toBeInTheDocument();
     expect(screen.getByDisplayValue("已存在")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: SAVE })).toBeInTheDocument();
+  });
+
+  it("back button shows '返回作品库' and goes to / when state.from is /", async () => {
+    const existing = {
+      id: 1, title: "t", subtitle: null, genre: null, style: null, pov: null,
+      description: null, target_words: 0, current_words: 0, status: "draft" as const,
+      cover: null, notes: null, created_at: "2026-08-10T00:00:00", updated_at: "2026-08-10T00:00:00",
+    };
+    vi.mocked(worksModule.useWork).mockReturnValue({ data: existing, isLoading: false } as any);
+    vi.mocked(worksModule.useCreateWork).mockReturnValue({ mutate: vi.fn(), isPending: false } as any);
+    vi.mocked(worksModule.useUpdateWork).mockReturnValue({ mutate: vi.fn(), isPending: false } as any);
+
+    const user = userEvent.setup();
+    renderForm("/works/1/edit", {
+      state: { from: "/" },
+      extraRoutes: [{ path: "/", testId: "library" }],
+    });
+
+    const back = await screen.findByRole("button", { name: /返回\s?作品库/ });
+    await user.click(back);
+
+    expect(await screen.findByTestId("library")).toBeInTheDocument();
+  });
+
+  it("back button shows '返回作品详情' and goes to /works/:wid when state.from is the detail page", async () => {
+    const existing = {
+      id: 1, title: "t", subtitle: null, genre: null, style: null, pov: null,
+      description: null, target_words: 0, current_words: 0, status: "draft" as const,
+      cover: null, notes: null, created_at: "2026-08-10T00:00:00", updated_at: "2026-08-10T00:00:00",
+    };
+    vi.mocked(worksModule.useWork).mockReturnValue({ data: existing, isLoading: false } as any);
+    vi.mocked(worksModule.useCreateWork).mockReturnValue({ mutate: vi.fn(), isPending: false } as any);
+    vi.mocked(worksModule.useUpdateWork).mockReturnValue({ mutate: vi.fn(), isPending: false } as any);
+
+    const user = userEvent.setup();
+    renderForm("/works/1/edit", {
+      state: { from: "/works/1" },
+      extraRoutes: [{ path: "/works/1", testId: "detail" }],
+    });
+
+    const back = await screen.findByRole("button", { name: /返回\s?作品详情/ });
+    await user.click(back);
+
+    expect(await screen.findByTestId("detail")).toBeInTheDocument();
+  });
+
+  it("back button falls back to '/works/:wid' when no state.from (e.g., direct URL / refresh)", async () => {
+    const existing = {
+      id: 1, title: "t", subtitle: null, genre: null, style: null, pov: null,
+      description: null, target_words: 0, current_words: 0, status: "draft" as const,
+      cover: null, notes: null, created_at: "2026-08-10T00:00:00", updated_at: "2026-08-10T00:00:00",
+    };
+    vi.mocked(worksModule.useWork).mockReturnValue({ data: existing, isLoading: false } as any);
+    vi.mocked(worksModule.useCreateWork).mockReturnValue({ mutate: vi.fn(), isPending: false } as any);
+    vi.mocked(worksModule.useUpdateWork).mockReturnValue({ mutate: vi.fn(), isPending: false } as any);
+
+    const user = userEvent.setup();
+    renderForm("/works/1/edit", {
+      extraRoutes: [{ path: "/works/1", testId: "detail" }],
+    });
+
+    const back = await screen.findByRole("button", { name: /返回\s?作品详情/ });
+    await user.click(back);
+
+    expect(await screen.findByTestId("detail")).toBeInTheDocument();
   });
 });
